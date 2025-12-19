@@ -131,16 +131,16 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	fmt.Fprintf(&buf, "- **Усього повідомлень:** %d\n", total)
 	fmt.Fprintf(&buf, "- **Учасників:** %d\n", participants)
 	if len(leavedNames) > 0 {
-		fmt.Fprintf(&buf, "- **Пішли (%d):** %s\n", len(leavedNames), strings.Join(leavedNames, ", "))
+		fmt.Fprintf(&buf, "- **Покинули чат: %d:** %s\n", len(leavedNames), strings.Join(leavedNames, ", "))
 	}
 	if len(joinedNames) > 0 {
-		fmt.Fprintf(&buf, "- **Прийшли (%d):** %s\n", len(joinedNames), strings.Join(joinedNames, ", "))
+		fmt.Fprintf(&buf, "- **Приєдналися: %d:** %s\n", len(joinedNames), strings.Join(joinedNames, ", "))
 	}
 	fmt.Fprintf(&buf, "- **Найгарячіший місяць:** %s (%d пов.)\n", monthLabel, monthCount)
 	fmt.Fprintf(&buf, "- **Найгарячіший день:** %s (%d пов.)\n", dayLabel, dayCount)
 	fmt.Fprintf(&buf, "- **Найактивніший день тижня:** %s (%d пов.)\n", weekdayLabel, weekdayCount)
 	fmt.Fprintf(&buf, "- **Піковий час:** %s (%d пов.)\n", hourLabel, hourCount)
-	fmt.Fprintf(&buf, "- **Медіана повідомлень/людину:** %.1f\n", median)
+	fmt.Fprintf(&buf, "- **Медіана повідомлень на людину:** %.1f\n", median)
 	fmt.Fprint(&buf, "\n")
 
 	if len(leaderboard) > 0 {
@@ -686,7 +686,7 @@ func (s *yearStats) leaderboard(reader *ChatCachedReader[UserData], limit int) [
 			avgChars = float64(e.chars) / float64(e.count)
 		}
 		nameLink := formatUserLink(reader, e.id, e.name)
-		res = append(res, fmt.Sprintf("%s — %d пов. (%.1f%%), середн. %.1f симв/повід", nameLink, e.count, e.percent, avgChars))
+		res = append(res, fmt.Sprintf("%s — %d пов. (%.1f%%), середн. %.1f симв./повід.", nameLink, e.count, e.percent, avgChars))
 	}
 	return res
 }
@@ -738,7 +738,7 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 
 	awards := []string{}
 	if maxMsgID != 0 {
-		awards = append(awards, fmt.Sprintf("🏆 MVP (найбільше повідомлень): %s — %d", formatUserLink(reader, maxMsgID, formatUserName(reader, maxMsgID)), maxMsgCount))
+		awards = append(awards, fmt.Sprintf("🏆 MVP за найбільше повідомлень: %s — %d", formatUserLink(reader, maxMsgID, formatUserName(reader, maxMsgID)), maxMsgCount))
 	}
 	if maxWordsID != 0 {
 		awards = append(awards, fmt.Sprintf("📝 Найбільше слів: %s — %d слів", formatUserLink(reader, maxWordsID, formatUserName(reader, maxWordsID)), maxWordsCount))
@@ -747,13 +747,13 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 		awards = append(awards, fmt.Sprintf("😂 Мотор емодзі: %s — %d емодзі", formatUserLink(reader, maxEmojiID, formatUserName(reader, maxEmojiID)), maxEmojiCount))
 	}
 	if maxAvgID != 0 {
-		awards = append(awards, fmt.Sprintf("📚 Есеїст (найдовші в середньому): %s — %.1f симв/повід", formatUserLink(reader, maxAvgID, formatUserName(reader, maxAvgID)), maxAvg))
+		awards = append(awards, fmt.Sprintf("📚 Есеїст (найдовші повідомлення в середньому): %s — %.1f симв/повід", formatUserLink(reader, maxAvgID, formatUserName(reader, maxAvgID)), maxAvg))
 	}
 	if minMsgID != 0 {
-		awards = append(awards, fmt.Sprintf("🕵️ Тихона (найменше повідомлень): %s — %d", formatUserLink(reader, minMsgID, formatUserName(reader, minMsgID)), minMsgCount))
+		awards = append(awards, fmt.Sprintf("🕵️ Тихоня (найменше повідомлень): %s — %d", formatUserLink(reader, minMsgID, formatUserName(reader, minMsgID)), minMsgCount))
 	}
 	if maxLinksID != 0 {
-		awards = append(awards, fmt.Sprintf("🔗 Лінкер (найбільше лінків): %s — %d", formatUserLink(reader, maxLinksID, formatUserName(reader, maxLinksID)), maxLinksCount))
+		awards = append(awards, fmt.Sprintf("🔗 Пруфер (найбільше лінків): %s — %d", formatUserLink(reader, maxLinksID, formatUserName(reader, maxLinksID)), maxLinksCount))
 	}
 	if maxForwardID != 0 {
 		awards = append(awards, fmt.Sprintf("📨 Форвардер: %s — %d пересилок", formatUserLink(reader, maxForwardID, formatUserName(reader, maxForwardID)), maxForwardCount))
