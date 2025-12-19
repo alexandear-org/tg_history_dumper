@@ -25,6 +25,31 @@ const (
 var (
 	instagramDomains = []string{"instagram.com", "ddinstagram.com"}
 	youtubeDomains   = []string{"youtube.com", "youtu.be"}
+
+	monthsUA = map[time.Month]string{
+		time.January:   "Січень",
+		time.February:  "Лютий",
+		time.March:     "Березень",
+		time.April:     "Квітень",
+		time.May:       "Травень",
+		time.June:      "Червень",
+		time.July:      "Липень",
+		time.August:    "Серпень",
+		time.September: "Вересень",
+		time.October:   "Жовтень",
+		time.November:  "Листопад",
+		time.December:  "Грудень",
+	}
+
+	weekdaysUA = map[time.Weekday]string{
+		time.Monday:    "Понеділок",
+		time.Tuesday:   "Вівторок",
+		time.Wednesday: "Середа",
+		time.Thursday:  "Четвер",
+		time.Friday:    "П'ятниця",
+		time.Saturday:  "Субота",
+		time.Sunday:    "Неділя",
+	}
 )
 
 func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (string, error) {
@@ -94,23 +119,23 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 
 	monthLabel := "n/a"
 	if monthCount > 0 {
-		monthLabel = month.String()
+		monthLabel = monthsUA[month]
 		if chatID, msgID, found := stats.firstMessageOfMonth(month); found {
 			monthLink := formatMessageLink(chatID, msgID)
-			monthLabel = fmt.Sprintf("[%s](%s)", month.String(), monthLink)
+			monthLabel = fmt.Sprintf("[%s](%s)", monthsUA[month], monthLink)
 		}
 	}
 	dayLabel := "n/a"
 	if dayCount > 0 {
-		dayLabel = day.Format("2006-01-02")
+		dayLabel = fmt.Sprintf("%d %s", day.Day(), monthsUA[day.Month()])
 		if chatID, msgID, found := stats.firstMessageOfDay(day); found {
 			dayLink := formatMessageLink(chatID, msgID)
-			dayLabel = fmt.Sprintf("[%s](%s)", day.Format("2006-01-02"), dayLink)
+			dayLabel = fmt.Sprintf("[%d %s](%s)", day.Day(), monthsUA[day.Month()], dayLink)
 		}
 	}
 	weekdayLabel := "n/a"
 	if weekdayCount > 0 {
-		weekdayLabel = weekday.String()
+		weekdayLabel = weekdaysUA[weekday]
 	}
 	hourLabel := "n/a"
 	if hour >= 0 {
@@ -596,7 +621,8 @@ func (s *yearStats) namesWithDates(reader *ChatCachedReader[UserData], ids map[i
 		name := formatUserName(reader, id)
 		link := formatUserLink(reader, id, name)
 		msgLink := formatMessageLink(info.chatID, info.msgID)
-		res = append(res, fmt.Sprintf("%s (%s) [view](%s)", link, info.date.UTC().Format("2006-01-02"), msgLink))
+		d := info.date.UTC()
+		res = append(res, fmt.Sprintf("%s (%d %s) [переглянути](%s)", link, d.Day(), monthsUA[d.Month()], msgLink))
 	}
 	return slices.Sorted(slices.Values(res))
 }
