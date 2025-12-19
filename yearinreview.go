@@ -234,7 +234,9 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 			name := formatUserName(userCache, lm.userID)
 			nameLink := formatUserLink(userCache, lm.userID, name)
 			msgLink := formatMessageLink(lm.chatID, lm.msgID)
-			fmt.Fprintf(&buf, "**%s** _%s_ — %s симв. — [переглянути](%s)\n\n", nameLink, lm.date.UTC().Format("2006-01-02 15:04"), formatThousands(lm.chars), msgLink)
+			d := lm.date.UTC()
+			dateStr := fmt.Sprintf("%d %s %02d:%02d", d.Day(), monthsUA[d.Month()], d.Hour(), d.Minute())
+			fmt.Fprintf(&buf, "**%s** [_%s_](%s) — %s симв.\n\n", nameLink, dateStr, msgLink, formatThousands(lm.chars))
 			preview := truncatePreview(lm.text, maxPreviewRunes)
 			fmt.Fprintf(&buf, "> %s\n\n", strings.ReplaceAll(preview, "\n", "\n> "))
 		}
