@@ -19,6 +19,7 @@ const (
 	maxPreviewRunes    = 300
 	minWordLength      = 4
 	maxLeaderboardSize = 20
+	maxReactedMessages = 10
 )
 
 var (
@@ -189,6 +190,18 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 		}
 	}
 
+	if topReacted := stats.getTopReactedMessages(maxReactedMessages); len(topReacted) > 0 {
+		fmt.Fprint(&buf, "## 🔥 Top reacted messages\n\n")
+		for i, rm := range topReacted {
+			name := formatUserName(userCache, rm.userID)
+			nameLink := formatUserLink(userCache, rm.userID, name)
+			msgLink := formatMessageLink(rm.chatID, rm.msgID)
+			fmt.Fprintf(&buf, "%d. **%s** — %d reactions — [view](%s)\n\n", i+1, nameLink, rm.reactionCount, msgLink)
+			preview := truncatePreview(rm.text, maxPreviewRunes)
+			fmt.Fprintf(&buf, "> %s\n\n", strings.ReplaceAll(preview, "\n", "\n> "))
+		}
+	}
+
 	return buf.String(), nil
 }
 
@@ -243,6 +256,13 @@ type yearStats struct {
 		chatID int64
 		msgID  int32
 	}
+	messageReactions map[string]struct {
+		chatID        int64
+		msgID         int32
+		userID        int64
+		text          string
+		reactionCount int
+	}
 	longest []longMessage
 }
 
@@ -266,6 +286,13 @@ func newYearStats() *yearStats {
 		firstMonthMsg: make(map[time.Month]struct {
 			chatID int64
 			msgID  int32
+		}),
+		messageReactions: make(map[string]struct {
+			chatID        int64
+			msgID         int32
+			userID        int64
+			text          string
+			reactionCount int
 		}),
 		longest: make([]longMessage, 0, maxLongestMessages),
 	}
@@ -328,6 +355,11 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 	msgAuthor, msgAuthorOk := extractUserID(msg)
 	if reactionsData, ok := msg["Reactions"]; ok && reactionsData != nil {
 		if reactionsMap, ok := reactionsData.(map[string]any); ok {
+			var reactionCount int
+			// Get total reaction count from the Reactions object
+			if totalCount, ok := reactionsMap["Results"].([]any); ok {
+				reactionCount = len(totalCount)
+			}
 			// Extract RecentReactions array which contains who reacted
 			if recentReactions, ok := reactionsMap["RecentReactions"].([]any); ok {
 				for _, rxnData := range recentReactions {
@@ -350,6 +382,27 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 								s.reactionsReceived[msgAuthor]++
 							}
 						}
+					}
+				}
+				// Track message reactions for top reacted messages
+				if reactionCount > 0 && msgAuthorOk {
+					msgKey := fmt.Sprintf("%d:%d", chatID, msg["ID"])
+					msgText := ""
+					if text, ok := msg["Message"].(string); ok {
+						msgText = text
+					}
+					s.messageReactions[msgKey] = struct {
+						chatID        int64
+						msgID         int32
+						userID        int64
+						text          string
+						reactionCount int
+					}{
+						chatID:        chatID,
+						msgID:         int32(msg["ID"].(float64)),
+						userID:        msgAuthor,
+						text:          msgText,
+						reactionCount: reactionCount,
 					}
 				}
 			}
@@ -458,7 +511,7 @@ func (s *yearStats) buildReactionLeaderboard(reader *ChatCachedReader[UserData],
 
 	entries := make([]entry, 0, len(reactions))
 	for id, count := range reactions {
-		if count > 0 {
+		if count >= 3 {
 			name := formatUserName(reader, id)
 			entries = append(entries, entry{id: id, name: name, count: count})
 		}
@@ -648,6 +701,64 @@ func (s *yearStats) getTopLongest(limit int) []longMessage {
 		longest = longest[:limit]
 	}
 	return longest
+}
+
+func (s *yearStats) getTopReactedMessages(limit int) []struct {
+	chatID        int64
+	msgID         int32
+	userID        int64
+	text          string
+	reactionCount int
+} {
+	if len(s.messageReactions) == 0 {
+		return nil
+	}
+	type msgReaction struct {
+		chatID        int64
+		msgID         int32
+		userID        int64
+		text          string
+		reactionCount int
+	}
+	msgs := make([]msgReaction, 0, len(s.messageReactions))
+	for _, data := range s.messageReactions {
+		msgs = append(msgs, msgReaction{
+			chatID:        data.chatID,
+			msgID:         data.msgID,
+			userID:        data.userID,
+			text:          data.text,
+			reactionCount: data.reactionCount,
+		})
+	}
+	slices.SortFunc(msgs, func(a, b msgReaction) int {
+		return cmp.Compare(b.reactionCount, a.reactionCount)
+	})
+	if limit > 0 && len(msgs) > limit {
+		msgs = msgs[:limit]
+	}
+	result := make([]struct {
+		chatID        int64
+		msgID         int32
+		userID        int64
+		text          string
+		reactionCount int
+	}, len(msgs))
+	for i, m := range msgs {
+		result[i] = struct {
+			chatID        int64
+			msgID         int32
+			userID        int64
+			text          string
+			reactionCount int
+		}{
+			chatID:        m.chatID,
+			msgID:         m.msgID,
+			userID:        m.userID,
+			text:          m.text,
+			reactionCount: m.reactionCount,
+		}
+	}
+	return result
 }
 
 func formatThousands(n int) string {
