@@ -81,6 +81,10 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	monthLabel := "n/a"
 	if monthCount > 0 {
 		monthLabel = month.String()
+		if chatID, msgID, found := stats.firstMessageOfMonth(month); found {
+			monthLink := formatMessageLink(chatID, msgID)
+			monthLabel = fmt.Sprintf("[%s](%s)", month.String(), monthLink)
+		}
 	}
 	weekdayLabel := "n/a"
 	if weekdayCount > 0 {
@@ -205,7 +209,11 @@ type yearStats struct {
 	monthCount         map[time.Month]int
 	weekdayCount       map[time.Weekday]int
 	hourCount          map[int]int
-	longest            []longMessage
+	firstMonthMsg      map[time.Month]struct {
+		chatID int64
+		msgID  int32
+	}
+	longest []longMessage
 }
 
 func newYearStats() *yearStats {
@@ -223,16 +231,31 @@ func newYearStats() *yearStats {
 		monthCount:         make(map[time.Month]int),
 		weekdayCount:       make(map[time.Weekday]int),
 		hourCount:          make(map[int]int),
-		longest:            make([]longMessage, 0, 5),
+		firstMonthMsg: make(map[time.Month]struct {
+			chatID int64
+			msgID  int32
+		}),
+		longest: make([]longMessage, 0, 5),
 	}
 }
 
 func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 	s.totalMessages++
 	date := time.Unix(int64(msg["Date"].(float64)), 0)
-	s.monthCount[date.Month()]++
+	month := date.Month()
+	s.monthCount[month]++
 	s.weekdayCount[date.Weekday()]++
 	s.hourCount[date.Hour()]++
+
+	// Track first message of each month
+	if _, exists := s.firstMonthMsg[month]; !exists {
+		if msgID, ok := msg["ID"].(float64); ok {
+			s.firstMonthMsg[month] = struct {
+				chatID int64
+				msgID  int32
+			}{chatID: chatID, msgID: int32(msgID)}
+		}
+	}
 
 	if userID, ok := extractUserID(msg); ok {
 		s.participantMsgs[userID]++
@@ -291,6 +314,13 @@ func (s *yearStats) mostActiveMonth() (time.Month, int) {
 		}
 	}
 	return maxMonth, maxCount
+}
+
+func (s *yearStats) firstMessageOfMonth(month time.Month) (chatID int64, msgID int32, found bool) {
+	if info, exists := s.firstMonthMsg[month]; exists {
+		return info.chatID, info.msgID, true
+	}
+	return 0, 0, false
 }
 
 func (s *yearStats) mostActiveWeekday() (time.Weekday, int) {
