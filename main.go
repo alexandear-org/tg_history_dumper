@@ -352,6 +352,9 @@ func dump() error {
 	doContactsDump := flag.String("dump-contacts", "", "enable contacts dump, use 'write' to enable dump, overriders config.dump_contacts")
 	doSessionsDump := flag.String("dump-sessions", "", "enable active sessions dump, use 'write' to enable dump, overriders config.dump_sessions")
 	httpAddr := flag.String("preview-http", "", "HTTP service address to browse through the dump")
+	doYearInReview := flag.Bool("year-in-review", false, "print messages summary for a given year from saved chats")
+	reviewYear := flag.Int("review-year", 2025, "year to summarize (used with -year-in-review)")
+	reviewChatID := flag.Int64("review-chat-id", 0, "limit summary to a single chat ID (0 = all)")
 	flag.BoolVar(&skipPendingWebpagePhotos, "skip-pending-webpage-photos", false, skipPendingWebpagePhotosHelp)
 	flag.Parse()
 
@@ -416,6 +419,11 @@ func dump() error {
 	}
 
 	saver := &JSONFilesHistorySaver{Dirpath: config.OutDirPath}
+
+	if *doYearInReview {
+		err := runYearInReview(saver, *reviewYear, *reviewChatID)
+		return merry.Prepend(err, "year-in-review")
+	}
 
 	if *httpAddr != "" {
 		err := servePreviewHttp(*httpAddr, config, saver)
