@@ -51,7 +51,7 @@ func NewFileProgressLogger() *FileProgressLogger {
 func (l *FileProgressLogger) OnProgress(fileLocation mtproto.TL, offset, size int64) {
 	prog := offset * 100 / size
 	if prog == 100 && l.prevProgress == 0 {
-		return //got file in one step, no need to log it
+		return // got file in one step, no need to log it
 	}
 	if prog == 100 || time.Since(l.prevTime) > 2*time.Second {
 		log.Info("%d%%", prog)
@@ -210,7 +210,7 @@ func loadAndSaveMessages(tg *tgclient.TGClient, chat *Chat, saver HistorySaver, 
 }
 
 func loadAndSaveStories(tg *tgclient.TGClient, chat *Chat, saver HistorySaver, tryLoadArchived bool) error {
-	chunkSize := int32(50) //TODO: 100 is available?
+	chunkSize := int32(50) // TODO: 100 is available?
 	lastSavedID, err := saver.GetLastStoryID(chat)
 	if err != nil {
 		return merry.Wrap(err)
@@ -299,6 +299,7 @@ func loadAndSaveStories(tg *tgclient.TGClient, chat *Chat, saver HistorySaver, t
 
 	return nil
 }
+
 func loadStoriesAndSaveRelated(tg *tgclient.TGClient, saver HistorySaver, chat *Chat, limit, offsetID int32, useArchived bool) ([]mtproto.TL, error) {
 	var stories, users, chats []mtproto.TL
 	var err error
@@ -421,8 +422,12 @@ func dump() error {
 	saver := &JSONFilesHistorySaver{Dirpath: config.OutDirPath}
 
 	if *doYearInReview {
-		err := runYearInReview(saver, *reviewYear, *reviewChatID)
-		return merry.Prepend(err, "year-in-review")
+		output, err := runYearInReview(saver, *reviewYear, *reviewChatID)
+		if err != nil {
+			return merry.Prepend(err, "year-in-review")
+		}
+		fmt.Print(output)
+		return nil
 	}
 
 	if *httpAddr != "" {

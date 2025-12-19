@@ -14,6 +14,148 @@ import (
 	"github.com/ansel1/merry/v2"
 )
 
+func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (string, error) {
+	chatEntries, err := saver.ReadSavedChatsList()
+	if err != nil {
+		return "", merry.Wrap(err)
+	}
+
+	userReader := NewChatSyncReader[UserData](saver.usersFPath())
+	chatReader := NewChatSyncReader[ChatData](saver.chatsFPath())
+
+	if err := userReader.UpdateOffsets(); err != nil {
+		return "", merry.Wrap(err)
+	}
+	if err := chatReader.UpdateOffsets(); err != nil {
+		return "", merry.Wrap(err)
+	}
+
+	chatsMsgReader := &ChatsMessageReader{}
+	server := &Server{}
+
+	stats := newYearStats()
+	userCache := &ChatCachedReader[UserData]{reader: userReader}
+	total := 0
+	headerTitle := ""
+	for _, chatEntry := range chatEntries {
+		if chatID != 0 && chatEntry.ID != chatID {
+			continue
+		}
+
+		title, err := server.readChatTitle(userReader, chatReader, chatEntry.ID, chatEntry.FSTitle)
+		if err != nil {
+			return "", merry.Wrap(err)
+		}
+		if chatID != 0 {
+			headerTitle = title
+		}
+
+		msgs, err := messagesInYear(chatsMsgReader, chatEntry.FPath, year)
+		if err != nil {
+			return "", merry.Wrap(err)
+		}
+		if len(msgs) == 0 {
+			continue
+		}
+
+		for _, msg := range msgs {
+			stats.addMessage(msg)
+		}
+
+		total += len(msgs)
+	}
+
+	var buf strings.Builder
+
+	participants := stats.participantCount()
+	total = stats.totalMessages
+	month, monthCount := stats.mostActiveMonth()
+	weekday, weekdayCount := stats.mostActiveWeekday()
+	hour, hourCount := stats.peakHour()
+	median := stats.medianMsgsPerPerson()
+	joinedNames := stats.names(userCache, stats.joiners)
+	leavedNames := stats.names(userCache, stats.leavers)
+	leaderboard := stats.leaderboard(userCache, 10)
+	awards := stats.funAwards(userCache)
+
+	monthLabel := "n/a"
+	if monthCount > 0 {
+		monthLabel = month.String()
+	}
+	weekdayLabel := "n/a"
+	if weekdayCount > 0 {
+		weekdayLabel = weekday.String()
+	}
+	hourLabel := "n/a"
+	if hour >= 0 {
+		hourLabel = fmt.Sprintf("%02d:00", hour)
+	}
+
+	if chatID != 0 {
+		if headerTitle != "" {
+			fmt.Fprintf(&buf, "Year in Review — %d for %s (#%d)\n\n", year, headerTitle, chatID)
+		} else {
+			fmt.Fprintf(&buf, "Year in Review — %d for chat #%d\n\n", year, chatID)
+		}
+	} else {
+		fmt.Fprintf(&buf, "Year in Review — %d\n\n", year)
+	}
+
+	fmt.Fprint(&buf, "Highlights\n")
+	fmt.Fprintf(&buf, "Total messages: %d\n", total)
+	fmt.Fprintf(&buf, "Participants: %d\n", participants)
+	fmt.Fprintf(&buf, "Joined users (%d): %s\n", len(joinedNames), strings.Join(joinedNames, ", "))
+	fmt.Fprintf(&buf, "Left users (%d): %s\n", len(leavedNames), strings.Join(leavedNames, ", "))
+	fmt.Fprintf(&buf, "Most active month: %s (%d msgs)\n", monthLabel, monthCount)
+	fmt.Fprintf(&buf, "Most active weekday: %s (%d msgs)\n", weekdayLabel, weekdayCount)
+	fmt.Fprintf(&buf, "Peak hour: %s (%d msgs)\n", hourLabel, hourCount)
+	fmt.Fprintf(&buf, "Median msgs/person: %.1f\n", median)
+	fmt.Fprint(&buf, "\n")
+
+	if len(leaderboard) > 0 {
+		fmt.Fprintf(&buf, "Leaderboard (messages):\n")
+		for _, line := range leaderboard {
+			fmt.Fprintf(&buf, "  %s\n", line)
+		}
+		fmt.Fprint(&buf, "\n")
+	}
+
+	if len(awards) > 0 {
+		fmt.Fprintf(&buf, "Fun Awards:\n")
+		for _, line := range awards {
+			fmt.Fprintf(&buf, "  %s\n", line)
+		}
+		fmt.Fprint(&buf, "\n")
+	}
+
+	if headerEmoji, tokens := stats.topEmojis(10); len(tokens) > 0 {
+		fmt.Fprintf(&buf, "Top emojis %s\n\n", headerEmoji)
+		fmt.Fprintf(&buf, "%s\n", strings.Join(tokens, " "))
+		fmt.Fprint(&buf, "\n")
+	}
+
+	if topWords := stats.topWords(20); len(topWords) > 0 {
+		fmt.Fprint(&buf, "Top words (excluding common stopwords)\n")
+		for _, line := range topWords {
+			fmt.Fprintf(&buf, "  %s\n", line)
+		}
+		fmt.Fprint(&buf, "\n")
+	}
+
+	if longest := stats.getTopLongest(5); len(longest) > 0 {
+		fmt.Fprint(&buf, "Longest messages (by character count)\n")
+		fmt.Fprint(&buf, "\n")
+		for _, lm := range longest {
+			name := formatUserName(userCache, lm.userID)
+			fmt.Fprintf(&buf, "%s on %s — %s chars\n\n", name, lm.date.UTC().Format("2006-01-02 15:04"), formatThousands(lm.chars))
+			preview := truncatePreview(lm.text, 280)
+			fmt.Fprintf(&buf, "\"%s\"\n\n", preview)
+		}
+	}
+
+	return buf.String(), nil
+}
+
 func messagesInYear(r *ChatsMessageReader, chatPath string, year int) ([]map[string]any, error) {
 	start := time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(year+1, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -42,146 +184,6 @@ func messagesInYear(r *ChatsMessageReader, chatPath string, year int) ([]map[str
 		}
 		offset += limit
 	}
-}
-
-func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) error {
-	chatEntries, err := saver.ReadSavedChatsList()
-	if err != nil {
-		return merry.Wrap(err)
-	}
-
-	userReader := NewChatSyncReader[UserData](saver.usersFPath())
-	chatReader := NewChatSyncReader[ChatData](saver.chatsFPath())
-
-	if err := userReader.UpdateOffsets(); err != nil {
-		return merry.Wrap(err)
-	}
-	if err := chatReader.UpdateOffsets(); err != nil {
-		return merry.Wrap(err)
-	}
-
-	chatsMsgReader := &ChatsMessageReader{}
-	server := &Server{}
-
-	stats := newYearStats()
-	userCache := &ChatCachedReader[UserData]{reader: userReader}
-	total := 0
-	headerTitle := ""
-	for _, chatEntry := range chatEntries {
-		if chatID != 0 && chatEntry.ID != chatID {
-			continue
-		}
-
-		title, err := server.readChatTitle(userReader, chatReader, chatEntry.ID, chatEntry.FSTitle)
-		if err != nil {
-			return merry.Wrap(err)
-		}
-		if chatID != 0 {
-			headerTitle = title
-		}
-
-		msgs, err := messagesInYear(chatsMsgReader, chatEntry.FPath, year)
-		if err != nil {
-			return merry.Wrap(err)
-		}
-		if len(msgs) == 0 {
-			continue
-		}
-
-		for _, msg := range msgs {
-			stats.addMessage(msg)
-		}
-
-		total += len(msgs)
-	}
-
-	participants := stats.participantCount()
-	total = stats.totalMessages
-	month, monthCount := stats.mostActiveMonth()
-	weekday, weekdayCount := stats.mostActiveWeekday()
-	hour, hourCount := stats.peakHour()
-	median := stats.medianMsgsPerPerson()
-	joinedNames := stats.names(userCache, stats.joiners)
-	leavedNames := stats.names(userCache, stats.leavers)
-	leaderboard := stats.leaderboard(userCache, 10)
-	awards := stats.funAwards(userCache)
-
-	monthLabel := "n/a"
-	if monthCount > 0 {
-		monthLabel = month.String()
-	}
-	weekdayLabel := "n/a"
-	if weekdayCount > 0 {
-		weekdayLabel = weekday.String()
-	}
-	hourLabel := "n/a"
-	if hour >= 0 {
-		hourLabel = fmt.Sprintf("%02d:00", hour)
-	}
-
-	if chatID != 0 {
-		if headerTitle != "" {
-			fmt.Printf("Year in Review — %d for %s (#%d)\n\n", year, headerTitle, chatID)
-		} else {
-			fmt.Printf("Year in Review — %d for chat #%d\n\n", year, chatID)
-		}
-	} else {
-		fmt.Printf("Year in Review — %d\n\n", year)
-	}
-
-	fmt.Println("Highlights")
-	fmt.Printf("Total messages: %d\n", total)
-	fmt.Printf("Participants: %d\n", participants)
-	fmt.Printf("Joined users (%d): %s\n", len(joinedNames), strings.Join(joinedNames, ", "))
-	fmt.Printf("Left users (%d): %s\n", len(leavedNames), strings.Join(leavedNames, ", "))
-	fmt.Printf("Most active month: %s (%d msgs)\n", monthLabel, monthCount)
-	fmt.Printf("Most active weekday: %s (%d msgs)\n", weekdayLabel, weekdayCount)
-	fmt.Printf("Peak hour: %s (%d msgs)\n", hourLabel, hourCount)
-	fmt.Printf("Median msgs/person: %.1f\n", median)
-	fmt.Println()
-
-	if len(leaderboard) > 0 {
-		fmt.Printf("Leaderboard (messages):\n")
-		for _, line := range leaderboard {
-			fmt.Printf("  %s\n", line)
-		}
-		fmt.Println()
-	}
-
-	if len(awards) > 0 {
-		fmt.Printf("Fun Awards:\n")
-		for _, line := range awards {
-			fmt.Printf("  %s\n", line)
-		}
-		fmt.Println()
-	}
-
-	if headerEmoji, tokens := stats.topEmojis(10); len(tokens) > 0 {
-		fmt.Printf("Top emojis %s\n\n", headerEmoji)
-		fmt.Println(strings.Join(tokens, " "))
-		fmt.Println()
-	}
-
-	if topWords := stats.topWords(20); len(topWords) > 0 {
-		fmt.Println("Top words (excluding common stopwords)")
-		for _, line := range topWords {
-			fmt.Printf("  %s\n", line)
-		}
-		fmt.Println()
-	}
-
-	if longest := stats.getTopLongest(5); len(longest) > 0 {
-		fmt.Println("Longest messages (by character count)")
-		fmt.Println()
-		for _, lm := range longest {
-			name := formatUserName(userCache, lm.userID)
-			fmt.Printf("%s on %s — %s chars\n\n", name, lm.date.UTC().Format("2006-01-02 15:04"), formatThousands(lm.chars))
-			preview := truncatePreview(lm.text, 280)
-			fmt.Printf("“%s”\n\n", preview)
-		}
-	}
-
-	return nil
 }
 
 type yearStats struct {
