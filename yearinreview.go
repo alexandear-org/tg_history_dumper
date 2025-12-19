@@ -241,6 +241,8 @@ type yearStats struct {
 	participantChars   map[int64]int
 	participantWords   map[int64]int
 	participantEmoji   map[int64]int
+	linkCount          map[int64]int
+	forwardCount       map[int64]int
 	instagramLinkCount map[int64]int
 	youtubeLinkCount   map[int64]int
 	reactionsReceived  map[int64]int
@@ -280,6 +282,8 @@ func newYearStats() *yearStats {
 		participantChars:   make(map[int64]int),
 		participantWords:   make(map[int64]int),
 		participantEmoji:   make(map[int64]int),
+		linkCount:          make(map[int64]int),
+		forwardCount:       make(map[int64]int),
 		instagramLinkCount: make(map[int64]int),
 		youtubeLinkCount:   make(map[int64]int),
 		reactionsReceived:  make(map[int64]int),
@@ -342,6 +346,7 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 			for _, e := range emojiRegexp.FindAllString(text, -1) {
 				s.emojiCounts[e]++
 			}
+			s.linkCount[userID] += countLinks(text)
 			// Count Instagram and YouTube links
 			for _, domain := range instagramDomains {
 				s.instagramLinkCount[userID] += countURLs(text, domain)
@@ -364,6 +369,11 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 				}
 				s.wordCounts[lw]++
 			}
+		}
+
+		// Count forwards
+		if fwd, ok := msg["FwdFrom"].(map[string]any); ok && len(fwd) > 0 {
+			s.forwardCount[userID]++
 		}
 	}
 
@@ -516,7 +526,8 @@ func (s *yearStats) namesWithDates(reader *ChatCachedReader[UserData], ids map[i
 	date   time.Time
 	chatID int64
 	msgID  int32
-}) []string {
+},
+) []string {
 	res := make([]string, 0, len(ids))
 	for id, info := range ids {
 		name := formatUserName(reader, id)
@@ -655,6 +666,8 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	maxWordsID, maxWordsCount := topByIntMap(s.participantWords, false)
 	maxEmojiID, maxEmojiCount := topByIntMap(s.participantEmoji, false)
 	minMsgID, minMsgCount := topByIntMap(s.participantMsgs, true)
+	maxLinksID, maxLinksCount := topByIntMap(s.linkCount, false)
+	maxForwardID, maxForwardCount := topByIntMap(s.forwardCount, false)
 	maxInstagramID, maxInstagramCount := topByIntMap(s.instagramLinkCount, false)
 	maxYoutubeID, maxYoutubeCount := topByIntMap(s.youtubeLinkCount, false)
 
@@ -675,6 +688,12 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	}
 	if minMsgID != 0 {
 		awards = append(awards, fmt.Sprintf("🕵️ Lurker (fewest messages): %s — %d", formatUserLink(reader, minMsgID, formatUserName(reader, minMsgID)), minMsgCount))
+	}
+	if maxLinksID != 0 {
+		awards = append(awards, fmt.Sprintf("🔗 Linker (most links): %s — %d", formatUserLink(reader, maxLinksID, formatUserName(reader, maxLinksID)), maxLinksCount))
+	}
+	if maxForwardID != 0 {
+		awards = append(awards, fmt.Sprintf("📨 Forwarder: %s — %d forwards", formatUserLink(reader, maxForwardID, formatUserName(reader, maxForwardID)), maxForwardCount))
 	}
 	if maxInstagramID != 0 {
 		awards = append(awards, fmt.Sprintf("📷 Instagrammer: %s — %d links", formatUserLink(reader, maxInstagramID, formatUserName(reader, maxInstagramID)), maxInstagramCount))
@@ -938,6 +957,17 @@ func countURLs(text string, domain string) int {
 	count := 0
 	for _, word := range strings.Fields(text) {
 		if strings.Contains(word, domain) {
+			count++
+		}
+	}
+	return count
+}
+
+// countLinks returns count of words that look like URLs (basic http/https check).
+func countLinks(text string) int {
+	count := 0
+	for _, word := range strings.Fields(text) {
+		if strings.HasPrefix(word, "http://") || strings.HasPrefix(word, "https://") {
 			count++
 		}
 	}
