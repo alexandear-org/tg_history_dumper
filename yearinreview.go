@@ -119,32 +119,32 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 
 	if chatID != 0 {
 		if headerTitle != "" {
-			fmt.Fprintf(&buf, "# Year in Review — %d for %s (#%d)\n\n", year, headerTitle, chatID)
+			fmt.Fprintf(&buf, "# Підсумки року — %d для %s (#%d)\n\n", year, headerTitle, chatID)
 		} else {
-			fmt.Fprintf(&buf, "# Year in Review — %d for chat #%d\n\n", year, chatID)
+			fmt.Fprintf(&buf, "# Підсумки року — %d для чату #%d\n\n", year, chatID)
 		}
 	} else {
-		fmt.Fprintf(&buf, "# Year in Review — %d\n\n", year)
+		fmt.Fprintf(&buf, "# Підсумки року — %d\n\n", year)
 	}
 
-	fmt.Fprint(&buf, "## 📊 Highlights\n\n")
-	fmt.Fprintf(&buf, "- **Total messages:** %d\n", total)
-	fmt.Fprintf(&buf, "- **Participants:** %d\n", participants)
+	fmt.Fprint(&buf, "## 📊 Головне за рік\n\n")
+	fmt.Fprintf(&buf, "- **Усього повідомлень:** %d\n", total)
+	fmt.Fprintf(&buf, "- **Учасників:** %d\n", participants)
 	if len(leavedNames) > 0 {
-		fmt.Fprintf(&buf, "- **Left users (%d):** %s\n", len(leavedNames), strings.Join(leavedNames, ", "))
+		fmt.Fprintf(&buf, "- **Пішли (%d):** %s\n", len(leavedNames), strings.Join(leavedNames, ", "))
 	}
 	if len(joinedNames) > 0 {
-		fmt.Fprintf(&buf, "- **Joined users (%d):** %s\n", len(joinedNames), strings.Join(joinedNames, ", "))
+		fmt.Fprintf(&buf, "- **Прийшли (%d):** %s\n", len(joinedNames), strings.Join(joinedNames, ", "))
 	}
-	fmt.Fprintf(&buf, "- **Most active month:** %s (%d msgs)\n", monthLabel, monthCount)
-	fmt.Fprintf(&buf, "- **Most active day:** %s (%d msgs)\n", dayLabel, dayCount)
-	fmt.Fprintf(&buf, "- **Most active weekday:** %s (%d msgs)\n", weekdayLabel, weekdayCount)
-	fmt.Fprintf(&buf, "- **Peak hour:** %s (%d msgs)\n", hourLabel, hourCount)
-	fmt.Fprintf(&buf, "- **Median msgs/person:** %.1f\n", median)
+	fmt.Fprintf(&buf, "- **Найгарячіший місяць:** %s (%d пов.)\n", monthLabel, monthCount)
+	fmt.Fprintf(&buf, "- **Найгарячіший день:** %s (%d пов.)\n", dayLabel, dayCount)
+	fmt.Fprintf(&buf, "- **Найактивніший день тижня:** %s (%d пов.)\n", weekdayLabel, weekdayCount)
+	fmt.Fprintf(&buf, "- **Піковий час:** %s (%d пов.)\n", hourLabel, hourCount)
+	fmt.Fprintf(&buf, "- **Медіана повідомлень/людину:** %.1f\n", median)
 	fmt.Fprint(&buf, "\n")
 
 	if len(leaderboard) > 0 {
-		fmt.Fprintf(&buf, "## 🏅 Leaderboard (messages)\n\n")
+		fmt.Fprintf(&buf, "## 🏅 Топ балакучих\n\n")
 		for i, line := range leaderboard {
 			fmt.Fprintf(&buf, "%d. %s\n", i+1, line)
 		}
@@ -152,7 +152,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	}
 
 	if rxnReceivedBoard := stats.reactionReceivedLeaderboard(userCache, maxLeaderboardSize); len(rxnReceivedBoard) > 0 {
-		fmt.Fprintf(&buf, "## 👍 Leaderboard (reactions received)\n\n")
+		fmt.Fprintf(&buf, "## 👍 Топ за отриманими реакціями\n\n")
 		for i, line := range rxnReceivedBoard {
 			fmt.Fprintf(&buf, "%d. %s\n", i+1, line)
 		}
@@ -160,7 +160,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	}
 
 	if rxnSentBoard := stats.reactionSentLeaderboard(userCache, maxLeaderboardSize); len(rxnSentBoard) > 0 {
-		fmt.Fprintf(&buf, "## 💬 Leaderboard (reactions sent)\n\n")
+		fmt.Fprintf(&buf, "## 💬 Топ за надісланими реакціями\n\n")
 		for i, line := range rxnSentBoard {
 			fmt.Fprintf(&buf, "%d. %s\n", i+1, line)
 		}
@@ -168,7 +168,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	}
 
 	if len(awards) > 0 {
-		fmt.Fprintf(&buf, "## 🎉 Fun Awards\n\n")
+		fmt.Fprintf(&buf, "## 🎉 Веселі нагороди\n\n")
 		for _, line := range awards {
 			fmt.Fprintf(&buf, "- %s\n", line)
 		}
@@ -176,12 +176,12 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	}
 
 	if headerEmoji, tokens := stats.topEmojis(10); len(tokens) > 0 {
-		fmt.Fprintf(&buf, "## 😊 Top emojis %s\n\n", headerEmoji)
+		fmt.Fprintf(&buf, "## 😊 Топ емодзі %s\n\n", headerEmoji)
 		fmt.Fprintf(&buf, "`%s`\n\n", strings.Join(tokens, " "))
 	}
 
 	if topWords := stats.topWords(20); len(topWords) > 0 {
-		fmt.Fprint(&buf, "## 📝 Top words (excluding common stopwords)\n\n")
+		fmt.Fprint(&buf, "## 📝 Топ слів (без поширених стоп-слів)\n\n")
 		for _, line := range topWords {
 			fmt.Fprintf(&buf, "- %s\n", line)
 		}
@@ -189,24 +189,24 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	}
 
 	if longest := stats.getTopLongest(maxLongestMessages); len(longest) > 0 {
-		fmt.Fprint(&buf, "## 📜 Longest messages (by character count)\n\n")
+		fmt.Fprint(&buf, "## 📜 Найдовші повідомлення (за кількістю символів)\n\n")
 		for _, lm := range longest {
 			name := formatUserName(userCache, lm.userID)
 			nameLink := formatUserLink(userCache, lm.userID, name)
 			msgLink := formatMessageLink(lm.chatID, lm.msgID)
-			fmt.Fprintf(&buf, "**%s** _%s_ — %s chars — [view](%s)\n\n", nameLink, lm.date.UTC().Format("2006-01-02 15:04"), formatThousands(lm.chars), msgLink)
+			fmt.Fprintf(&buf, "**%s** _%s_ — %s симв — [переглянути](%s)\n\n", nameLink, lm.date.UTC().Format("2006-01-02 15:04"), formatThousands(lm.chars), msgLink)
 			preview := truncatePreview(lm.text, maxPreviewRunes)
 			fmt.Fprintf(&buf, "> %s\n\n", strings.ReplaceAll(preview, "\n", "\n> "))
 		}
 	}
 
 	if topReacted := stats.getTopReactedMessages(maxReactedMessages); len(topReacted) > 0 {
-		fmt.Fprint(&buf, "## 🔥 Top reacted messages\n\n")
+		fmt.Fprint(&buf, "## 🔥 Найбільш реактивні повідомлення\n\n")
 		for i, rm := range topReacted {
 			name := formatUserName(userCache, rm.userID)
 			nameLink := formatUserLink(userCache, rm.userID, name)
 			msgLink := formatMessageLink(rm.chatID, rm.msgID)
-			fmt.Fprintf(&buf, "%d. **%s** — %d reactions — [view](%s)\n\n", i+1, nameLink, rm.reactionCount, msgLink)
+			fmt.Fprintf(&buf, "%d. **%s** — %d реакцій — [переглянути](%s)\n\n", i+1, nameLink, rm.reactionCount, msgLink)
 			preview := truncatePreview(rm.text, maxPreviewRunes)
 			fmt.Fprintf(&buf, "> %s\n\n", strings.ReplaceAll(preview, "\n", "\n> "))
 		}
@@ -629,7 +629,7 @@ func (s *yearStats) buildReactionLeaderboard(reader *ChatCachedReader[UserData],
 	res := make([]string, 0, len(entries))
 	for _, e := range entries {
 		nameLink := formatUserLink(reader, e.id, e.name)
-		res = append(res, fmt.Sprintf("%s - %d reactions", nameLink, e.count))
+		res = append(res, fmt.Sprintf("%s — %d реакцій", nameLink, e.count))
 	}
 	return res
 }
@@ -673,7 +673,7 @@ func (s *yearStats) leaderboard(reader *ChatCachedReader[UserData], limit int) [
 			avgChars = float64(e.chars) / float64(e.count)
 		}
 		nameLink := formatUserLink(reader, e.id, e.name)
-		res = append(res, fmt.Sprintf("%s - %d msgs (%.1f%%), avg %.1f chars/msg", nameLink, e.count, e.percent, avgChars))
+		res = append(res, fmt.Sprintf("%s — %d пов. (%.1f%%), середн. %.1f симв/повід", nameLink, e.count, e.percent, avgChars))
 	}
 	return res
 }
@@ -725,31 +725,31 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 
 	awards := []string{}
 	if maxMsgID != 0 {
-		awards = append(awards, fmt.Sprintf("🏆 MVP (most messages): %s — %d", formatUserLink(reader, maxMsgID, formatUserName(reader, maxMsgID)), maxMsgCount))
+		awards = append(awards, fmt.Sprintf("🏆 MVP (найбільше повідомлень): %s — %d", formatUserLink(reader, maxMsgID, formatUserName(reader, maxMsgID)), maxMsgCount))
 	}
 	if maxWordsID != 0 {
-		awards = append(awards, fmt.Sprintf("📝 Most words typed: %s — %d words", formatUserLink(reader, maxWordsID, formatUserName(reader, maxWordsID)), maxWordsCount))
+		awards = append(awards, fmt.Sprintf("📝 Найбільше слів: %s — %d слів", formatUserLink(reader, maxWordsID, formatUserName(reader, maxWordsID)), maxWordsCount))
 	}
 	if maxEmojiID != 0 {
-		awards = append(awards, fmt.Sprintf("😂 Emoji machine: %s — %d emojis", formatUserLink(reader, maxEmojiID, formatUserName(reader, maxEmojiID)), maxEmojiCount))
+		awards = append(awards, fmt.Sprintf("😂 Мотор емодзі: %s — %d емодзі", formatUserLink(reader, maxEmojiID, formatUserName(reader, maxEmojiID)), maxEmojiCount))
 	}
 	if maxAvgID != 0 {
-		awards = append(awards, fmt.Sprintf("📚 Essayist (longest avg message): %s — %.1f chars/msg", formatUserLink(reader, maxAvgID, formatUserName(reader, maxAvgID)), maxAvg))
+		awards = append(awards, fmt.Sprintf("📚 Есеїст (найдовші в середньому): %s — %.1f симв/повід", formatUserLink(reader, maxAvgID, formatUserName(reader, maxAvgID)), maxAvg))
 	}
 	if minMsgID != 0 {
-		awards = append(awards, fmt.Sprintf("🕵️ Lurker (fewest messages): %s — %d", formatUserLink(reader, minMsgID, formatUserName(reader, minMsgID)), minMsgCount))
+		awards = append(awards, fmt.Sprintf("🕵️ Тихона (найменше повідомлень): %s — %d", formatUserLink(reader, minMsgID, formatUserName(reader, minMsgID)), minMsgCount))
 	}
 	if maxLinksID != 0 {
-		awards = append(awards, fmt.Sprintf("🔗 Linker (most links): %s — %d", formatUserLink(reader, maxLinksID, formatUserName(reader, maxLinksID)), maxLinksCount))
+		awards = append(awards, fmt.Sprintf("🔗 Лінкер (найбільше лінків): %s — %d", formatUserLink(reader, maxLinksID, formatUserName(reader, maxLinksID)), maxLinksCount))
 	}
 	if maxForwardID != 0 {
-		awards = append(awards, fmt.Sprintf("📨 Forwarder: %s — %d forwards", formatUserLink(reader, maxForwardID, formatUserName(reader, maxForwardID)), maxForwardCount))
+		awards = append(awards, fmt.Sprintf("📨 Форвардер: %s — %d пересилок", formatUserLink(reader, maxForwardID, formatUserName(reader, maxForwardID)), maxForwardCount))
 	}
 	if maxInstagramID != 0 {
-		awards = append(awards, fmt.Sprintf("📷 Instagrammer: %s — %d links", formatUserLink(reader, maxInstagramID, formatUserName(reader, maxInstagramID)), maxInstagramCount))
+		awards = append(awards, fmt.Sprintf("📷 Інстаграмер: %s — %d лінків", formatUserLink(reader, maxInstagramID, formatUserName(reader, maxInstagramID)), maxInstagramCount))
 	}
 	if maxYoutubeID != 0 {
-		awards = append(awards, fmt.Sprintf("🎬 YouTuber: %s — %d links", formatUserLink(reader, maxYoutubeID, formatUserName(reader, maxYoutubeID)), maxYoutubeCount))
+		awards = append(awards, fmt.Sprintf("🎬 Ютубер: %s — %d лінків", formatUserLink(reader, maxYoutubeID, formatUserName(reader, maxYoutubeID)), maxYoutubeCount))
 	}
 	return awards
 }
