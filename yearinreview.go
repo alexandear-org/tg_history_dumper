@@ -257,7 +257,7 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 				if _, stop := stopWords[lw]; stop {
 					continue
 				}
-				if len([]rune(lw)) < 3 {
+				if len([]rune(lw)) < 4 {
 					continue
 				}
 				s.wordCounts[lw]++
@@ -758,12 +758,14 @@ var stopWords = func() map[string]struct{} {
 		"be", "are", "was", "were", "have", "has", "had", "do", "does", "did", "so",
 		"if", "but", "than", "then", "also", "can", "could", "would", "should", "will",
 		"just", "out", "up", "down", "over", "under", "here", "there", "too", "very",
-		"https", "com", "www",
+		"https", "com", "www", "instagram", "youtube", "igsh",
 	})
 	add([]string{ // Ukrainian
 		"і", "та", "а", "але", "що", "це", "цей", "ця", "ці", "ті", "той", "такий",
 		"як", "у", "в", "на", "до", "з", "зі", "за", "по", "над", "під", "для", "про",
 		"не", "ж", "би", "й", "я", "ти", "ви", "ми", "він", "вона", "вони", "від",
+		"щоб", "коли", "де", "тут", "там", "також", "може", "було", "є", "теж", "вже",
+		"якщо", "хто", "тому", "через", "був", "була", "було", "буде",
 	})
 	return m
 }()
