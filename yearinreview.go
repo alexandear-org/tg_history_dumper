@@ -83,6 +83,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	participants := stats.participantCount()
 	total = stats.totalMessages
 	month, monthCount := stats.mostActiveMonth()
+	day, dayCount := stats.mostActiveDay()
 	weekday, weekdayCount := stats.mostActiveWeekday()
 	hour, hourCount := stats.peakHour()
 	median := stats.medianMsgsPerPerson()
@@ -97,6 +98,14 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 		if chatID, msgID, found := stats.firstMessageOfMonth(month); found {
 			monthLink := formatMessageLink(chatID, msgID)
 			monthLabel = fmt.Sprintf("[%s](%s)", month.String(), monthLink)
+		}
+	}
+	dayLabel := "n/a"
+	if dayCount > 0 {
+		dayLabel = day.Format("2006-01-02")
+		if chatID, msgID, found := stats.firstMessageOfDay(day); found {
+			dayLink := formatMessageLink(chatID, msgID)
+			dayLabel = fmt.Sprintf("[%s](%s)", day.Format("2006-01-02"), dayLink)
 		}
 	}
 	weekdayLabel := "n/a"
@@ -128,6 +137,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 		fmt.Fprintf(&buf, "- **Joined users (%d):** %s\n", len(joinedNames), strings.Join(joinedNames, ", "))
 	}
 	fmt.Fprintf(&buf, "- **Most active month:** %s (%d msgs)\n", monthLabel, monthCount)
+	fmt.Fprintf(&buf, "- **Most active day:** %s (%d msgs)\n", dayLabel, dayCount)
 	fmt.Fprintf(&buf, "- **Most active weekday:** %s (%d msgs)\n", weekdayLabel, weekdayCount)
 	fmt.Fprintf(&buf, "- **Peak hour:** %s (%d msgs)\n", hourLabel, hourCount)
 	fmt.Fprintf(&buf, "- **Median msgs/person:** %.1f\n", median)
@@ -260,9 +270,14 @@ type yearStats struct {
 		msgID  int32
 	}
 	monthCount    map[time.Month]int
+	dayCount      map[time.Time]int
 	weekdayCount  map[time.Weekday]int
 	hourCount     map[int]int
 	firstMonthMsg map[time.Month]struct {
+		chatID int64
+		msgID  int32
+	}
+	firstDayMsg map[time.Time]struct {
 		chatID int64
 		msgID  int32
 	}
@@ -301,9 +316,14 @@ func newYearStats() *yearStats {
 			msgID  int32
 		}),
 		monthCount:   make(map[time.Month]int),
+		dayCount:     make(map[time.Time]int),
 		weekdayCount: make(map[time.Weekday]int),
 		hourCount:    make(map[int]int),
 		firstMonthMsg: make(map[time.Month]struct {
+			chatID int64
+			msgID  int32
+		}),
+		firstDayMsg: make(map[time.Time]struct {
 			chatID int64
 			msgID  int32
 		}),
@@ -321,8 +341,10 @@ func newYearStats() *yearStats {
 func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 	s.totalMessages++
 	date := time.Unix(int64(msg["Date"].(float64)), 0)
+	day := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
 	month := date.Month()
 	s.monthCount[month]++
+	s.dayCount[day]++
 	s.weekdayCount[date.Weekday()]++
 	s.hourCount[date.Hour()]++
 
@@ -330,6 +352,15 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 	if _, exists := s.firstMonthMsg[month]; !exists {
 		if msgID, ok := msg["ID"].(float64); ok {
 			s.firstMonthMsg[month] = struct {
+				chatID int64
+				msgID  int32
+			}{chatID: chatID, msgID: int32(msgID)}
+		}
+	}
+
+	if _, exists := s.firstDayMsg[day]; !exists {
+		if msgID, ok := msg["ID"].(float64); ok {
+			s.firstDayMsg[day] = struct {
 				chatID int64
 				msgID  int32
 			}{chatID: chatID, msgID: int32(msgID)}
@@ -479,8 +510,27 @@ func (s *yearStats) mostActiveMonth() (time.Month, int) {
 	return maxMonth, maxCount
 }
 
+func (s *yearStats) mostActiveDay() (time.Time, int) {
+	var maxDay time.Time
+	maxCount := 0
+	for d, c := range s.dayCount {
+		if c > maxCount || (c == maxCount && (maxDay.IsZero() || d.Before(maxDay))) {
+			maxDay = d
+			maxCount = c
+		}
+	}
+	return maxDay, maxCount
+}
+
 func (s *yearStats) firstMessageOfMonth(month time.Month) (chatID int64, msgID int32, found bool) {
 	if info, exists := s.firstMonthMsg[month]; exists {
+		return info.chatID, info.msgID, true
+	}
+	return 0, 0, false
+}
+
+func (s *yearStats) firstMessageOfDay(day time.Time) (chatID int64, msgID int32, found bool) {
+	if info, exists := s.firstDayMsg[day]; exists {
 		return info.chatID, info.msgID, true
 	}
 	return 0, 0, false
