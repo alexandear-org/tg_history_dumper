@@ -14,6 +14,18 @@ import (
 	"github.com/ansel1/merry/v2"
 )
 
+const (
+	maxLongestMessages = 10
+	maxPreviewRunes    = 280
+	minWordLength      = 4
+	maxLeaderboardSize = 10
+)
+
+var (
+	instagramDomains = []string{"instagram.com", "ddinstagram.com"}
+	youtubeDomains   = []string{"youtube.com", "youtu.be"}
+)
+
 func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (string, error) {
 	chatEntries, err := saver.ReadSavedChatsList()
 	if err != nil {
@@ -75,7 +87,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	median := stats.medianMsgsPerPerson()
 	joinedNames := stats.names(userCache, stats.joiners)
 	leavedNames := stats.names(userCache, stats.leavers)
-	leaderboard := stats.leaderboard(userCache, 10)
+	leaderboard := stats.leaderboard(userCache, maxLeaderboardSize)
 	awards := stats.funAwards(userCache)
 
 	monthLabel := "n/a"
@@ -149,14 +161,14 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 		fmt.Fprint(&buf, "\n")
 	}
 
-	if longest := stats.getTopLongest(5); len(longest) > 0 {
+	if longest := stats.getTopLongest(maxLongestMessages); len(longest) > 0 {
 		fmt.Fprint(&buf, "## 📜 Longest messages (by character count)\n\n")
 		for _, lm := range longest {
 			name := formatUserName(userCache, lm.userID)
 			nameLink := formatUserLink(userCache, lm.userID, name)
 			msgLink := formatMessageLink(lm.chatID, lm.msgID)
 			fmt.Fprintf(&buf, "**%s** _%s_ — %s chars — [view](%s)\n\n", nameLink, lm.date.UTC().Format("2006-01-02 15:04"), formatThousands(lm.chars), msgLink)
-			preview := truncatePreview(lm.text, 280)
+			preview := truncatePreview(lm.text, maxPreviewRunes)
 			fmt.Fprintf(&buf, "> %s\n\n", strings.ReplaceAll(preview, "\n", "\n> "))
 		}
 	}
@@ -235,7 +247,7 @@ func newYearStats() *yearStats {
 			chatID int64
 			msgID  int32
 		}),
-		longest: make([]longMessage, 0, 5),
+		longest: make([]longMessage, 0, maxLongestMessages),
 	}
 }
 
@@ -268,19 +280,23 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 				s.emojiCounts[e]++
 			}
 			// Count Instagram and YouTube links
-			s.instagramLinkCount[userID] += countURLs(text, "instagram.com") + countURLs(text, "ddinstagram.com")
-			s.youtubeLinkCount[userID] += countURLs(text, "youtube.com") + countURLs(text, "youtu.be")
+			for _, domain := range instagramDomains {
+				s.instagramLinkCount[userID] += countURLs(text, domain)
+			}
+			for _, domain := range youtubeDomains {
+				s.youtubeLinkCount[userID] += countURLs(text, domain)
+			}
 			// Track top longest messages, excluding reposts forwarded from channels
 			if !isForwardFromChannel(msg) {
 				msgID := int32(msg["ID"].(float64))
-				s.considerLongest(longMessage{userID: userID, chatID: chatID, date: date, msgID: msgID, chars: charLen, text: text}, 5)
+				s.considerLongest(longMessage{userID: userID, chatID: chatID, date: date, msgID: msgID, chars: charLen, text: text}, maxLongestMessages)
 			}
 			for _, w := range splitWords(text) {
 				lw := strings.ToLower(w)
 				if _, stop := stopWords[lw]; stop {
 					continue
 				}
-				if len([]rune(lw)) < 4 {
+				if len([]rune(lw)) < minWordLength {
 					continue
 				}
 				s.wordCounts[lw]++
