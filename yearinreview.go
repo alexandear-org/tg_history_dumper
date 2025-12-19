@@ -59,7 +59,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 		}
 
 		for _, msg := range msgs {
-			stats.addMessage(msg)
+			stats.addMessage(chatEntry.ID, msg)
 		}
 
 		total += len(msgs)
@@ -93,63 +93,67 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 
 	if chatID != 0 {
 		if headerTitle != "" {
-			fmt.Fprintf(&buf, "Year in Review — %d for %s (#%d)\n\n", year, headerTitle, chatID)
+			fmt.Fprintf(&buf, "# Year in Review — %d for %s (#%d)\n\n", year, headerTitle, chatID)
 		} else {
-			fmt.Fprintf(&buf, "Year in Review — %d for chat #%d\n\n", year, chatID)
+			fmt.Fprintf(&buf, "# Year in Review — %d for chat #%d\n\n", year, chatID)
 		}
 	} else {
-		fmt.Fprintf(&buf, "Year in Review — %d\n\n", year)
+		fmt.Fprintf(&buf, "# Year in Review — %d\n\n", year)
 	}
 
-	fmt.Fprint(&buf, "Highlights\n")
-	fmt.Fprintf(&buf, "Total messages: %d\n", total)
-	fmt.Fprintf(&buf, "Participants: %d\n", participants)
-	fmt.Fprintf(&buf, "Joined users (%d): %s\n", len(joinedNames), strings.Join(joinedNames, ", "))
-	fmt.Fprintf(&buf, "Left users (%d): %s\n", len(leavedNames), strings.Join(leavedNames, ", "))
-	fmt.Fprintf(&buf, "Most active month: %s (%d msgs)\n", monthLabel, monthCount)
-	fmt.Fprintf(&buf, "Most active weekday: %s (%d msgs)\n", weekdayLabel, weekdayCount)
-	fmt.Fprintf(&buf, "Peak hour: %s (%d msgs)\n", hourLabel, hourCount)
-	fmt.Fprintf(&buf, "Median msgs/person: %.1f\n", median)
+	fmt.Fprint(&buf, "## 📊 Highlights\n\n")
+	fmt.Fprintf(&buf, "- **Total messages:** %d\n", total)
+	fmt.Fprintf(&buf, "- **Participants:** %d\n", participants)
+	if len(joinedNames) > 0 {
+		fmt.Fprintf(&buf, "- **Joined users (%d):** %s\n", len(joinedNames), strings.Join(joinedNames, ", "))
+	}
+	if len(leavedNames) > 0 {
+		fmt.Fprintf(&buf, "- **Left users (%d):** %s\n", len(leavedNames), strings.Join(leavedNames, ", "))
+	}
+	fmt.Fprintf(&buf, "- **Most active month:** %s (%d msgs)\n", monthLabel, monthCount)
+	fmt.Fprintf(&buf, "- **Most active weekday:** %s (%d msgs)\n", weekdayLabel, weekdayCount)
+	fmt.Fprintf(&buf, "- **Peak hour:** %s (%d msgs)\n", hourLabel, hourCount)
+	fmt.Fprintf(&buf, "- **Median msgs/person:** %.1f\n", median)
 	fmt.Fprint(&buf, "\n")
 
 	if len(leaderboard) > 0 {
-		fmt.Fprintf(&buf, "Leaderboard (messages):\n")
-		for _, line := range leaderboard {
-			fmt.Fprintf(&buf, "  %s\n", line)
+		fmt.Fprintf(&buf, "## 🏅 Leaderboard (messages)\n\n")
+		for i, line := range leaderboard {
+			fmt.Fprintf(&buf, "%d. %s\n", i+1, line)
 		}
 		fmt.Fprint(&buf, "\n")
 	}
 
 	if len(awards) > 0 {
-		fmt.Fprintf(&buf, "Fun Awards:\n")
+		fmt.Fprintf(&buf, "## 🎉 Fun Awards\n\n")
 		for _, line := range awards {
-			fmt.Fprintf(&buf, "  %s\n", line)
+			fmt.Fprintf(&buf, "- %s\n", line)
 		}
 		fmt.Fprint(&buf, "\n")
 	}
 
 	if headerEmoji, tokens := stats.topEmojis(10); len(tokens) > 0 {
-		fmt.Fprintf(&buf, "Top emojis %s\n\n", headerEmoji)
-		fmt.Fprintf(&buf, "%s\n", strings.Join(tokens, " "))
-		fmt.Fprint(&buf, "\n")
+		fmt.Fprintf(&buf, "## 😊 Top emojis %s\n\n", headerEmoji)
+		fmt.Fprintf(&buf, "`%s`\n\n", strings.Join(tokens, " "))
 	}
 
 	if topWords := stats.topWords(20); len(topWords) > 0 {
-		fmt.Fprint(&buf, "Top words (excluding common stopwords)\n")
+		fmt.Fprint(&buf, "## 📝 Top words (excluding common stopwords)\n\n")
 		for _, line := range topWords {
-			fmt.Fprintf(&buf, "  %s\n", line)
+			fmt.Fprintf(&buf, "- %s\n", line)
 		}
 		fmt.Fprint(&buf, "\n")
 	}
 
 	if longest := stats.getTopLongest(5); len(longest) > 0 {
-		fmt.Fprint(&buf, "Longest messages (by character count)\n")
-		fmt.Fprint(&buf, "\n")
+		fmt.Fprint(&buf, "## 📜 Longest messages (by character count)\n\n")
 		for _, lm := range longest {
 			name := formatUserName(userCache, lm.userID)
-			fmt.Fprintf(&buf, "%s on %s — %s chars\n\n", name, lm.date.UTC().Format("2006-01-02 15:04"), formatThousands(lm.chars))
+			nameLink := formatUserLink(userCache, lm.userID, name)
+			msgLink := formatMessageLink(lm.chatID, lm.msgID)
+			fmt.Fprintf(&buf, "**%s** _%s_ — %s chars — [view](%s)\n\n", nameLink, lm.date.UTC().Format("2006-01-02 15:04"), formatThousands(lm.chars), msgLink)
 			preview := truncatePreview(lm.text, 280)
-			fmt.Fprintf(&buf, "\"%s\"\n\n", preview)
+			fmt.Fprintf(&buf, "> %s\n\n", strings.ReplaceAll(preview, "\n", "\n> "))
 		}
 	}
 
@@ -219,7 +223,7 @@ func newYearStats() *yearStats {
 	}
 }
 
-func (s *yearStats) addMessage(msg map[string]any) {
+func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 	s.totalMessages++
 	date := time.Unix(int64(msg["Date"].(float64)), 0)
 	s.monthCount[date.Month()]++
@@ -238,7 +242,8 @@ func (s *yearStats) addMessage(msg map[string]any) {
 			}
 			// Track top longest messages, excluding reposts forwarded from channels
 			if !isForwardFromChannel(msg) {
-				s.considerLongest(longMessage{userID: userID, date: date, chars: charLen, text: text}, 5)
+				msgID := int32(msg["ID"].(float64))
+				s.considerLongest(longMessage{userID: userID, chatID: chatID, date: date, msgID: msgID, chars: charLen, text: text}, 5)
 			}
 			for _, w := range splitWords(text) {
 				lw := strings.ToLower(w)
@@ -363,7 +368,8 @@ func (s *yearStats) leaderboard(reader *ChatCachedReader[UserData], limit int) [
 		if e.count > 0 {
 			avgChars = float64(e.chars) / float64(e.count)
 		}
-		res = append(res, fmt.Sprintf("%s - %d msgs (%.1f%%), avg %.1f chars/msg", e.name, e.count, e.percent, avgChars))
+		nameLink := formatUserLink(reader, e.id, e.name)
+		res = append(res, fmt.Sprintf("%s - %d msgs (%.1f%%), avg %.1f chars/msg", nameLink, e.count, e.percent, avgChars))
 	}
 	return res
 }
@@ -411,26 +417,28 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 
 	awards := []string{}
 	if maxMsgID != 0 {
-		awards = append(awards, fmt.Sprintf("🏆 MVP (most messages): %s — %d", formatUserName(reader, maxMsgID), maxMsgCount))
+		awards = append(awards, fmt.Sprintf("🏆 MVP (most messages): %s — %d", formatUserLink(reader, maxMsgID, formatUserName(reader, maxMsgID)), maxMsgCount))
 	}
 	if maxWordsID != 0 {
-		awards = append(awards, fmt.Sprintf("📝 Most words typed: %s — %d words", formatUserName(reader, maxWordsID), maxWordsCount))
+		awards = append(awards, fmt.Sprintf("📝 Most words typed: %s — %d words", formatUserLink(reader, maxWordsID, formatUserName(reader, maxWordsID)), maxWordsCount))
 	}
 	if maxEmojiID != 0 {
-		awards = append(awards, fmt.Sprintf("😂 Emoji machine: %s — %d emojis", formatUserName(reader, maxEmojiID), maxEmojiCount))
+		awards = append(awards, fmt.Sprintf("😂 Emoji machine: %s — %d emojis", formatUserLink(reader, maxEmojiID, formatUserName(reader, maxEmojiID)), maxEmojiCount))
 	}
 	if maxAvgID != 0 {
-		awards = append(awards, fmt.Sprintf("📚 Essayist (longest avg message): %s — %.1f chars/msg", formatUserName(reader, maxAvgID), maxAvg))
+		awards = append(awards, fmt.Sprintf("📚 Essayist (longest avg message): %s — %.1f chars/msg", formatUserLink(reader, maxAvgID, formatUserName(reader, maxAvgID)), maxAvg))
 	}
 	if minMsgID != 0 {
-		awards = append(awards, fmt.Sprintf("🕵️ Lurker (fewest messages): %s — %d", formatUserName(reader, minMsgID), minMsgCount))
+		awards = append(awards, fmt.Sprintf("🕵️ Lurker (fewest messages): %s — %d", formatUserLink(reader, minMsgID, formatUserName(reader, minMsgID)), minMsgCount))
 	}
 	return awards
 }
 
 type longMessage struct {
 	userID int64
+	chatID int64
 	date   time.Time
+	msgID  int32
 	chars  int
 	text   string
 }
@@ -551,7 +559,7 @@ func topAvgChars(chars map[int64]int, msgs map[int64]int) (int64, float64) {
 	return bestID, bestAvg
 }
 
-var emojiRegexp = regexp.MustCompile(`[\x{1F300}-\x{1F6FF}\x{1F900}-\x{1F9FF}\x{1FA70}-\x{1FAFF}\x{1F600}-\x{1F64F}]`)
+var emojiRegexp = regexp.MustCompile(`[\x{1F300}-\x{1F6FF}\x{1F900}-\x{1F9FF}\x{1FA70}-\x{1FAFF}\x{1F600}-\x{1F64F}][\x{1F3FB}-\x{1F3FF}\x{FE0E}\x{FE0F}\x{200D}]*`)
 
 func countEmojis(text string) int {
 	return len(emojiRegexp.FindAllString(text, -1))
@@ -660,6 +668,26 @@ func formatUserName(reader *ChatCachedReader[UserData], id int64) string {
 		}
 	}
 	return "user#" + strconv.FormatInt(id, 10)
+}
+
+// formatUserLink returns a markdown link to the user's Telegram profile if username is available.
+func formatUserLink(reader *ChatCachedReader[UserData], id int64, displayName string) string {
+	user, err := reader.ReadOpt(id)
+	if err == nil && user != nil && user.Username != nil && *user.Username != "" {
+		return fmt.Sprintf("[%s](https://t.me/%s)", displayName, *user.Username)
+	}
+	return displayName
+}
+
+// formatMessageLink returns a Telegram link to the message.
+func formatMessageLink(chatID int64, msgID int32) string {
+	// For private chats and groups, use the format: https://t.me/c/{abs(chat_id)}/{message_id}
+	// Negative chat IDs indicate groups/channels; absolute value is used in the link
+	absID := chatID
+	if absID < 0 {
+		absID = -absID
+	}
+	return fmt.Sprintf("https://t.me/c/%d/%d", absID, msgID)
 }
 
 func (s *yearStats) topWords(limit int) []string {
