@@ -140,6 +140,22 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 		fmt.Fprint(&buf, "\n")
 	}
 
+	if rxnReceivedBoard := stats.reactionReceivedLeaderboard(userCache, maxLeaderboardSize); len(rxnReceivedBoard) > 0 {
+		fmt.Fprintf(&buf, "## 👍 Leaderboard (reactions received)\n\n")
+		for i, line := range rxnReceivedBoard {
+			fmt.Fprintf(&buf, "%d. %s\n", i+1, line)
+		}
+		fmt.Fprint(&buf, "\n")
+	}
+
+	if rxnSentBoard := stats.reactionSentLeaderboard(userCache, maxLeaderboardSize); len(rxnSentBoard) > 0 {
+		fmt.Fprintf(&buf, "## 💬 Leaderboard (reactions sent)\n\n")
+		for i, line := range rxnSentBoard {
+			fmt.Fprintf(&buf, "%d. %s\n", i+1, line)
+		}
+		fmt.Fprint(&buf, "\n")
+	}
+
 	if len(awards) > 0 {
 		fmt.Fprintf(&buf, "## 🎉 Fun Awards\n\n")
 		for _, line := range awards {
@@ -214,6 +230,8 @@ type yearStats struct {
 	participantEmoji   map[int64]int
 	instagramLinkCount map[int64]int
 	youtubeLinkCount   map[int64]int
+	reactionsReceived  map[int64]int
+	reactionsSent      map[int64]int
 	emojiCounts        map[string]int
 	wordCounts         map[string]int
 	joiners            map[int64]struct{}
@@ -236,6 +254,8 @@ func newYearStats() *yearStats {
 		participantEmoji:   make(map[int64]int),
 		instagramLinkCount: make(map[int64]int),
 		youtubeLinkCount:   make(map[int64]int),
+		reactionsReceived:  make(map[int64]int),
+		reactionsSent:      make(map[int64]int),
 		emojiCounts:        make(map[string]int),
 		wordCounts:         make(map[string]int),
 		joiners:            make(map[int64]struct{}),
@@ -300,6 +320,38 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 					continue
 				}
 				s.wordCounts[lw]++
+			}
+		}
+	}
+
+	// Count reactions on messages
+	msgAuthor, msgAuthorOk := extractUserID(msg)
+	if reactionsData, ok := msg["Reactions"]; ok && reactionsData != nil {
+		if reactionsMap, ok := reactionsData.(map[string]any); ok {
+			// Extract RecentReactions array which contains who reacted
+			if recentReactions, ok := reactionsMap["RecentReactions"].([]any); ok {
+				for _, rxnData := range recentReactions {
+					if rxnMap, ok := rxnData.(map[string]any); ok {
+						// Extract the user ID from PeerID
+						var senderID int64
+						if peerID, ok := rxnMap["PeerID"].(map[string]any); ok {
+							// PeerID can have UserID, ChannelID, etc.
+							if userID, ok := peerID["UserID"]; ok {
+								if id, ok := parseID(userID); ok {
+									senderID = id
+								}
+							}
+						}
+
+						if senderID != 0 {
+							s.reactionsSent[senderID]++
+							// Count reactions received for the message author
+							if msgAuthorOk {
+								s.reactionsReceived[msgAuthor]++
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -383,6 +435,52 @@ func (s *yearStats) names(reader *ChatCachedReader[UserData], ids map[int64]stru
 		res = append(res, link)
 	}
 	return slices.Sorted(slices.Values(res))
+}
+
+func (s *yearStats) reactionReceivedLeaderboard(reader *ChatCachedReader[UserData], limit int) []string {
+	return s.buildReactionLeaderboard(reader, s.reactionsReceived, limit)
+}
+
+func (s *yearStats) reactionSentLeaderboard(reader *ChatCachedReader[UserData], limit int) []string {
+	return s.buildReactionLeaderboard(reader, s.reactionsSent, limit)
+}
+
+func (s *yearStats) buildReactionLeaderboard(reader *ChatCachedReader[UserData], reactions map[int64]int, limit int) []string {
+	if len(reactions) == 0 {
+		return nil
+	}
+
+	type entry struct {
+		id    int64
+		name  string
+		count int
+	}
+
+	entries := make([]entry, 0, len(reactions))
+	for id, count := range reactions {
+		if count > 0 {
+			name := formatUserName(reader, id)
+			entries = append(entries, entry{id: id, name: name, count: count})
+		}
+	}
+
+	slices.SortFunc(entries, func(a, b entry) int {
+		if a.count != b.count {
+			return cmp.Compare(b.count, a.count)
+		}
+		return cmp.Compare(a.name, b.name)
+	})
+
+	if limit > 0 && len(entries) > limit {
+		entries = entries[:limit]
+	}
+
+	res := make([]string, 0, len(entries))
+	for _, e := range entries {
+		nameLink := formatUserLink(reader, e.id, e.name)
+		res = append(res, fmt.Sprintf("%s - %d reactions", nameLink, e.count))
+	}
+	return res
 }
 
 func (s *yearStats) leaderboard(reader *ChatCachedReader[UserData], limit int) []string {
