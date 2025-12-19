@@ -191,35 +191,39 @@ func messagesInYear(r *ChatsMessageReader, chatPath string, year int) ([]map[str
 }
 
 type yearStats struct {
-	totalMessages    int
-	participantMsgs  map[int64]int
-	participantChars map[int64]int
-	participantWords map[int64]int
-	participantEmoji map[int64]int
-	emojiCounts      map[string]int
-	wordCounts       map[string]int
-	joiners          map[int64]struct{}
-	leavers          map[int64]struct{}
-	monthCount       map[time.Month]int
-	weekdayCount     map[time.Weekday]int
-	hourCount        map[int]int
-	longest          []longMessage
+	totalMessages      int
+	participantMsgs    map[int64]int
+	participantChars   map[int64]int
+	participantWords   map[int64]int
+	participantEmoji   map[int64]int
+	instagramLinkCount map[int64]int
+	youtubeLinkCount   map[int64]int
+	emojiCounts        map[string]int
+	wordCounts         map[string]int
+	joiners            map[int64]struct{}
+	leavers            map[int64]struct{}
+	monthCount         map[time.Month]int
+	weekdayCount       map[time.Weekday]int
+	hourCount          map[int]int
+	longest            []longMessage
 }
 
 func newYearStats() *yearStats {
 	return &yearStats{
-		participantMsgs:  make(map[int64]int),
-		participantChars: make(map[int64]int),
-		participantWords: make(map[int64]int),
-		participantEmoji: make(map[int64]int),
-		emojiCounts:      make(map[string]int),
-		wordCounts:       make(map[string]int),
-		joiners:          make(map[int64]struct{}),
-		leavers:          make(map[int64]struct{}),
-		monthCount:       make(map[time.Month]int),
-		weekdayCount:     make(map[time.Weekday]int),
-		hourCount:        make(map[int]int),
-		longest:          make([]longMessage, 0, 5),
+		participantMsgs:    make(map[int64]int),
+		participantChars:   make(map[int64]int),
+		participantWords:   make(map[int64]int),
+		participantEmoji:   make(map[int64]int),
+		instagramLinkCount: make(map[int64]int),
+		youtubeLinkCount:   make(map[int64]int),
+		emojiCounts:        make(map[string]int),
+		wordCounts:         make(map[string]int),
+		joiners:            make(map[int64]struct{}),
+		leavers:            make(map[int64]struct{}),
+		monthCount:         make(map[time.Month]int),
+		weekdayCount:       make(map[time.Weekday]int),
+		hourCount:          make(map[int]int),
+		longest:            make([]longMessage, 0, 5),
 	}
 }
 
@@ -240,6 +244,9 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 			for _, e := range emojiRegexp.FindAllString(text, -1) {
 				s.emojiCounts[e]++
 			}
+			// Count Instagram and YouTube links
+			s.instagramLinkCount[userID] += countURLs(text, "instagram.com") + countURLs(text, "ddinstagram.com")
+			s.youtubeLinkCount[userID] += countURLs(text, "youtube.com") + countURLs(text, "youtu.be")
 			// Track top longest messages, excluding reposts forwarded from channels
 			if !isForwardFromChannel(msg) {
 				msgID := int32(msg["ID"].(float64))
@@ -412,6 +419,8 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	maxWordsID, maxWordsCount := topByIntMap(s.participantWords, false)
 	maxEmojiID, maxEmojiCount := topByIntMap(s.participantEmoji, false)
 	minMsgID, minMsgCount := topByIntMap(s.participantMsgs, true)
+	maxInstagramID, maxInstagramCount := topByIntMap(s.instagramLinkCount, false)
+	maxYoutubeID, maxYoutubeCount := topByIntMap(s.youtubeLinkCount, false)
 
 	maxAvgID, maxAvg := topAvgChars(s.participantChars, s.participantMsgs)
 
@@ -430,6 +439,12 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	}
 	if minMsgID != 0 {
 		awards = append(awards, fmt.Sprintf("🕵️ Lurker (fewest messages): %s — %d", formatUserLink(reader, minMsgID, formatUserName(reader, minMsgID)), minMsgCount))
+	}
+	if maxInstagramID != 0 {
+		awards = append(awards, fmt.Sprintf("📷 Instagrammer: %s — %d links", formatUserLink(reader, maxInstagramID, formatUserName(reader, maxInstagramID)), maxInstagramCount))
+	}
+	if maxYoutubeID != 0 {
+		awards = append(awards, fmt.Sprintf("🎬 YouTuber: %s — %d links", formatUserLink(reader, maxYoutubeID, formatUserName(reader, maxYoutubeID)), maxYoutubeCount))
 	}
 	return awards
 }
@@ -623,6 +638,16 @@ func parseID(val any) (int64, bool) {
 		return int64(v), true
 	}
 	return 0, false
+}
+
+func countURLs(text string, domain string) int {
+	count := 0
+	for _, word := range strings.Fields(text) {
+		if strings.Contains(word, domain) {
+			count++
+		}
+	}
+	return count
 }
 
 func extractUserID(msg map[string]any) (int64, bool) {
