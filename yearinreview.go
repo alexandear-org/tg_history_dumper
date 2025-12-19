@@ -332,7 +332,9 @@ func (s *yearStats) medianMsgsPerPerson() float64 {
 func (s *yearStats) names(reader *ChatCachedReader[UserData], ids map[int64]struct{}) []string {
 	res := make([]string, 0, len(ids))
 	for id := range ids {
-		res = append(res, formatUserName(reader, id))
+		name := formatUserName(reader, id)
+		link := formatUserLink(reader, id, name)
+		res = append(res, link)
 	}
 	return slices.Sorted(slices.Values(res))
 }
