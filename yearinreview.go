@@ -413,9 +413,17 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 	if reactionsData, ok := msg["Reactions"]; ok && reactionsData != nil {
 		if reactionsMap, ok := reactionsData.(map[string]any); ok {
 			var reactionCount int
-			// Get total reaction count from the Reactions object
-			if totalCount, ok := reactionsMap["Results"].([]any); ok {
-				reactionCount = len(totalCount)
+			// Sum all reactions (Results can contain counts per reaction type)
+			if results, ok := reactionsMap["Results"].([]any); ok {
+				for _, r := range results {
+					if rm, ok := r.(map[string]any); ok {
+						if c, ok := rm["Count"].(float64); ok {
+							reactionCount += int(c)
+							continue
+						}
+					}
+					reactionCount++
+				}
 			}
 			// Extract RecentReactions array which contains who reacted
 			if recentReactions, ok := reactionsMap["RecentReactions"].([]any); ok {
@@ -434,12 +442,17 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 
 						if senderID != 0 {
 							s.reactionsSent[senderID]++
-							// Count reactions received for the message author
-							if msgAuthorOk {
-								s.reactionsReceived[msgAuthor]++
-							}
 						}
 					}
+				}
+				if reactionCount == 0 {
+					// Fallback to recent reactions count if Results absent
+					if recentReactions, ok := reactionsMap["RecentReactions"].([]any); ok {
+						reactionCount = len(recentReactions)
+					}
+				}
+				if reactionCount > 0 && msgAuthorOk {
+					s.reactionsReceived[msgAuthor] += reactionCount
 				}
 				// Track message reactions for top reacted messages
 				if reactionCount > 0 && msgAuthorOk {
