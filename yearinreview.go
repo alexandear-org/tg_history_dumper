@@ -86,8 +86,8 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	weekday, weekdayCount := stats.mostActiveWeekday()
 	hour, hourCount := stats.peakHour()
 	median := stats.medianMsgsPerPerson()
-	joinedNames := stats.names(userCache, stats.joiners)
-	leavedNames := stats.names(userCache, stats.leavers)
+	joinedNames := stats.namesWithDates(userCache, stats.joiners)
+	leavedNames := stats.namesWithDates(userCache, stats.leavers)
 	leaderboard := stats.leaderboard(userCache, maxLeaderboardSize)
 	awards := stats.funAwards(userCache)
 
@@ -121,11 +121,11 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	fmt.Fprint(&buf, "## 📊 Highlights\n\n")
 	fmt.Fprintf(&buf, "- **Total messages:** %d\n", total)
 	fmt.Fprintf(&buf, "- **Participants:** %d\n", participants)
-	if len(joinedNames) > 0 {
-		fmt.Fprintf(&buf, "- **Joined users (%d):** %s\n", len(joinedNames), strings.Join(joinedNames, ", "))
-	}
 	if len(leavedNames) > 0 {
 		fmt.Fprintf(&buf, "- **Left users (%d):** %s\n", len(leavedNames), strings.Join(leavedNames, ", "))
+	}
+	if len(joinedNames) > 0 {
+		fmt.Fprintf(&buf, "- **Joined users (%d):** %s\n", len(joinedNames), strings.Join(joinedNames, ", "))
 	}
 	fmt.Fprintf(&buf, "- **Most active month:** %s (%d msgs)\n", monthLabel, monthCount)
 	fmt.Fprintf(&buf, "- **Most active weekday:** %s (%d msgs)\n", weekdayLabel, weekdayCount)
@@ -247,12 +247,20 @@ type yearStats struct {
 	reactionsSent      map[int64]int
 	emojiCounts        map[string]int
 	wordCounts         map[string]int
-	joiners            map[int64]struct{}
-	leavers            map[int64]struct{}
-	monthCount         map[time.Month]int
-	weekdayCount       map[time.Weekday]int
-	hourCount          map[int]int
-	firstMonthMsg      map[time.Month]struct {
+	joiners            map[int64]struct {
+		date   time.Time
+		chatID int64
+		msgID  int32
+	}
+	leavers map[int64]struct {
+		date   time.Time
+		chatID int64
+		msgID  int32
+	}
+	monthCount    map[time.Month]int
+	weekdayCount  map[time.Weekday]int
+	hourCount     map[int]int
+	firstMonthMsg map[time.Month]struct {
 		chatID int64
 		msgID  int32
 	}
@@ -278,11 +286,19 @@ func newYearStats() *yearStats {
 		reactionsSent:      make(map[int64]int),
 		emojiCounts:        make(map[string]int),
 		wordCounts:         make(map[string]int),
-		joiners:            make(map[int64]struct{}),
-		leavers:            make(map[int64]struct{}),
-		monthCount:         make(map[time.Month]int),
-		weekdayCount:       make(map[time.Weekday]int),
-		hourCount:          make(map[int]int),
+		joiners: make(map[int64]struct {
+			date   time.Time
+			chatID int64
+			msgID  int32
+		}),
+		leavers: make(map[int64]struct {
+			date   time.Time
+			chatID int64
+			msgID  int32
+		}),
+		monthCount:   make(map[time.Month]int),
+		weekdayCount: make(map[time.Weekday]int),
+		hourCount:    make(map[int]int),
 		firstMonthMsg: make(map[time.Month]struct {
 			chatID int64
 			msgID  int32
@@ -412,11 +428,27 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 	action, ok := msg["Action"].(map[string]any)
 	if ok {
 		joins, leaves := extractActionUserIDs(action)
+		msgID := int32(0)
+		if mid, ok := msg["ID"].(float64); ok {
+			msgID = int32(mid)
+		}
 		for _, id := range joins {
-			s.joiners[id] = struct{}{}
+			if _, exists := s.joiners[id]; !exists {
+				s.joiners[id] = struct {
+					date   time.Time
+					chatID int64
+					msgID  int32
+				}{date: date, chatID: chatID, msgID: msgID}
+			}
 		}
 		for _, id := range leaves {
-			s.leavers[id] = struct{}{}
+			if _, exists := s.leavers[id]; !exists {
+				s.leavers[id] = struct {
+					date   time.Time
+					chatID int64
+					msgID  int32
+				}{date: date, chatID: chatID, msgID: msgID}
+			}
 		}
 	}
 }
@@ -480,12 +512,17 @@ func (s *yearStats) medianMsgsPerPerson() float64 {
 	return float64(counts[mid-1]+counts[mid]) / 2
 }
 
-func (s *yearStats) names(reader *ChatCachedReader[UserData], ids map[int64]struct{}) []string {
+func (s *yearStats) namesWithDates(reader *ChatCachedReader[UserData], ids map[int64]struct {
+	date   time.Time
+	chatID int64
+	msgID  int32
+}) []string {
 	res := make([]string, 0, len(ids))
-	for id := range ids {
+	for id, info := range ids {
 		name := formatUserName(reader, id)
 		link := formatUserLink(reader, id, name)
-		res = append(res, link)
+		msgLink := formatMessageLink(info.chatID, info.msgID)
+		res = append(res, fmt.Sprintf("%s (%s) [view](%s)", link, info.date.UTC().Format("2006-01-02"), msgLink))
 	}
 	return slices.Sorted(slices.Values(res))
 }
