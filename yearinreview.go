@@ -16,9 +16,9 @@ import (
 
 const (
 	maxLongestMessages = 10
-	maxPreviewRunes    = 280
+	maxPreviewRunes    = 300
 	minWordLength      = 4
-	maxLeaderboardSize = 10
+	maxLeaderboardSize = 20
 )
 
 var (
