@@ -1,9 +1,11 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
+	"maps"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -305,11 +307,7 @@ func (s *yearStats) medianMsgsPerPerson() float64 {
 	if len(s.participantMsgs) == 0 {
 		return 0
 	}
-	counts := make([]int, 0, len(s.participantMsgs))
-	for _, c := range s.participantMsgs {
-		counts = append(counts, c)
-	}
-	sort.Ints(counts)
+	counts := slices.Sorted(maps.Values(s.participantMsgs))
 	mid := len(counts) / 2
 	if len(counts)%2 == 1 {
 		return float64(counts[mid])
@@ -322,8 +320,7 @@ func (s *yearStats) names(reader *ChatCachedReader[UserData], ids map[int64]stru
 	for id := range ids {
 		res = append(res, formatUserName(reader, id))
 	}
-	sort.Strings(res)
-	return res
+	return slices.Sorted(slices.Values(res))
 }
 
 func (s *yearStats) leaderboard(reader *ChatCachedReader[UserData], limit int) []string {
@@ -347,11 +344,11 @@ func (s *yearStats) leaderboard(reader *ChatCachedReader[UserData], limit int) [
 		entries = append(entries, entry{id: id, name: name, count: count, chars: chars, percent: percent})
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].count == entries[j].count {
-			return entries[i].name < entries[j].name
+	slices.SortFunc(entries, func(a, b entry) int {
+		if a.count != b.count {
+			return cmp.Compare(b.count, a.count)
 		}
-		return entries[i].count > entries[j].count
+		return cmp.Compare(a.name, b.name)
 	})
 
 	if limit > 0 && len(entries) > limit {
@@ -381,11 +378,11 @@ func (s *yearStats) topEmojis(limit int) (headerEmoji string, tokens []string) {
 	for e, c := range s.emojiCounts {
 		arr = append(arr, pair{emoji: e, count: c})
 	}
-	sort.Slice(arr, func(i, j int) bool {
-		if arr[i].count == arr[j].count {
-			return arr[i].emoji < arr[j].emoji
+	slices.SortFunc(arr, func(a, b pair) int {
+		if a.count != b.count {
+			return cmp.Compare(b.count, a.count)
 		}
-		return arr[i].count > arr[j].count
+		return cmp.Compare(a.emoji, b.emoji)
 	})
 	if limit > 0 && len(arr) > limit {
 		arr = arr[:limit]
@@ -463,19 +460,23 @@ func (s *yearStats) getTopLongest(limit int) []longMessage {
 	if len(s.longest) == 0 {
 		return nil
 	}
-	arr := make([]longMessage, len(s.longest))
-	copy(arr, s.longest)
-	sort.Slice(arr, func(i, j int) bool {
-		if arr[i].chars == arr[j].chars {
-			// older first if same len
-			return arr[i].date.Before(arr[j].date)
+	longest := slices.Clone(s.longest)
+	slices.SortFunc(longest, func(a, b longMessage) int {
+		if a.chars != b.chars {
+			return cmp.Compare(b.chars, a.chars)
 		}
-		return arr[i].chars > arr[j].chars
+		if a.date.Before(b.date) {
+			return -1
+		}
+		if a.date.After(b.date) {
+			return 1
+		}
+		return 0
 	})
-	if limit > 0 && len(arr) > limit {
-		arr = arr[:limit]
+	if limit > 0 && len(longest) > limit {
+		longest = longest[:limit]
 	}
-	return arr
+	return longest
 }
 
 func formatThousands(n int) string {
@@ -587,9 +588,7 @@ func parseIDs(val any) []int64 {
 			ids = append(ids, int64(item))
 		}
 	case []int64:
-		for _, item := range v {
-			ids = append(ids, item)
-		}
+		ids = append(ids, v...)
 	case []float64:
 		for _, item := range v {
 			ids = append(ids, int64(item))
@@ -673,11 +672,11 @@ func (s *yearStats) topWords(limit int) []string {
 	for w, c := range s.wordCounts {
 		arr = append(arr, pair{word: w, count: c})
 	}
-	sort.Slice(arr, func(i, j int) bool {
-		if arr[i].count == arr[j].count {
-			return arr[i].word < arr[j].word
+	slices.SortFunc(arr, func(a, b pair) int {
+		if a.count != b.count {
+			return cmp.Compare(b.count, a.count)
 		}
-		return arr[i].count > arr[j].count
+		return cmp.Compare(a.word, b.word)
 	})
 	if limit > 0 && len(arr) > limit {
 		arr = arr[:limit]
