@@ -27,6 +27,21 @@ var (
 	youtubeDomains   = []string{"youtube.com", "youtu.be"}
 
 	monthsUA = map[time.Month]string{
+		time.January:   "січ",
+		time.February:  "лют",
+		time.March:     "бер",
+		time.April:     "кві",
+		time.May:       "тра",
+		time.June:      "чер",
+		time.July:      "лип",
+		time.August:    "сер",
+		time.September: "вер",
+		time.October:   "жов",
+		time.November:  "лис",
+		time.December:  "гру",
+	}
+
+	monthsFullUA = map[time.Month]string{
 		time.January:   "Січень",
 		time.February:  "Лютий",
 		time.March:     "Березень",
@@ -119,10 +134,10 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 
 	monthLabel := "n/a"
 	if monthCount > 0 {
-		monthLabel = monthsUA[month]
+		monthLabel = monthsFullUA[month]
 		if chatID, msgID, found := stats.firstMessageOfMonth(month); found {
 			monthLink := formatMessageLink(chatID, msgID)
-			monthLabel = fmt.Sprintf("[%s](%s)", monthsUA[month], monthLink)
+			monthLabel = fmt.Sprintf("[%s](%s)", monthsFullUA[month], monthLink)
 		}
 	}
 	dayLabel := "n/a"
@@ -219,7 +234,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 			name := formatUserName(userCache, lm.userID)
 			nameLink := formatUserLink(userCache, lm.userID, name)
 			msgLink := formatMessageLink(lm.chatID, lm.msgID)
-			fmt.Fprintf(&buf, "**%s** _%s_ — %s симв — [переглянути](%s)\n\n", nameLink, lm.date.UTC().Format("2006-01-02 15:04"), formatThousands(lm.chars), msgLink)
+			fmt.Fprintf(&buf, "**%s** _%s_ — %s симв. — [переглянути](%s)\n\n", nameLink, lm.date.UTC().Format("2006-01-02 15:04"), formatThousands(lm.chars), msgLink)
 			preview := truncatePreview(lm.text, maxPreviewRunes)
 			fmt.Fprintf(&buf, "> %s\n\n", strings.ReplaceAll(preview, "\n", "\n> "))
 		}
@@ -622,7 +637,7 @@ func (s *yearStats) namesWithDates(reader *ChatCachedReader[UserData], ids map[i
 		link := formatUserLink(reader, id, name)
 		msgLink := formatMessageLink(info.chatID, info.msgID)
 		d := info.date.UTC()
-		res = append(res, fmt.Sprintf("%s (%d %s) [переглянути](%s)", link, d.Day(), monthsUA[d.Month()], msgLink))
+		res = append(res, fmt.Sprintf("%s ([%d %s](%s))", link, d.Day(), monthsUA[d.Month()], msgLink))
 	}
 	return slices.Sorted(slices.Values(res))
 }
@@ -773,7 +788,7 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 		awards = append(awards, fmt.Sprintf("😂 Мотор емодзі: %s — %d емодзі", formatUserLink(reader, maxEmojiID, formatUserName(reader, maxEmojiID)), maxEmojiCount))
 	}
 	if maxAvgID != 0 {
-		awards = append(awards, fmt.Sprintf("📚 Есеїст (найдовші повідомлення в середньому): %s — %.1f симв/повід", formatUserLink(reader, maxAvgID, formatUserName(reader, maxAvgID)), maxAvg))
+		awards = append(awards, fmt.Sprintf("📚 Есеїст (найдовші повідомлення в середньому): %s — %.1f симв./повід.", formatUserLink(reader, maxAvgID, formatUserName(reader, maxAvgID)), maxAvg))
 	}
 	if minMsgID != 0 {
 		awards = append(awards, fmt.Sprintf("🕵️ Тихоня (найменше повідомлень): %s — %d", formatUserLink(reader, minMsgID, formatUserName(reader, minMsgID)), minMsgCount))
@@ -785,10 +800,10 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 		awards = append(awards, fmt.Sprintf("📨 Форвардер: %s — %d пересилок", formatUserLink(reader, maxForwardID, formatUserName(reader, maxForwardID)), maxForwardCount))
 	}
 	if maxInstagramID != 0 {
-		awards = append(awards, fmt.Sprintf("📷 Інстаграмер: %s — %d лінків", formatUserLink(reader, maxInstagramID, formatUserName(reader, maxInstagramID)), maxInstagramCount))
+		awards = append(awards, fmt.Sprintf("📷 Інстаграмер: %s — %d лінків на Instagram", formatUserLink(reader, maxInstagramID, formatUserName(reader, maxInstagramID)), maxInstagramCount))
 	}
 	if maxYoutubeID != 0 {
-		awards = append(awards, fmt.Sprintf("🎬 Ютубер: %s — %d лінків", formatUserLink(reader, maxYoutubeID, formatUserName(reader, maxYoutubeID)), maxYoutubeCount))
+		awards = append(awards, fmt.Sprintf("🎬 Ютубер: %s — %d лінків на YouTube", formatUserLink(reader, maxYoutubeID, formatUserName(reader, maxYoutubeID)), maxYoutubeCount))
 	}
 	return awards
 }
