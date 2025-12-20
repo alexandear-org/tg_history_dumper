@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"maps"
 	"regexp"
 	"slices"
@@ -203,6 +204,10 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	fmt.Fprintf(&buf, "- **Медіана повідомлень на людину:** %d\n", int(median))
 	fmt.Fprint(&buf, "\n")
 
+	pdfPageBreak := func(w io.Writer) {
+		fmt.Fprintf(w, `<div style="page-break-after: always;"></div>`+"\n\n")
+	}
+
 	if len(leaderboard) > 0 {
 		fmt.Fprintf(&buf, "## 🏅 Топ балакучих\n\n")
 		for i, line := range leaderboard {
@@ -225,6 +230,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 			fmt.Fprintf(&buf, "%d. %s\n", i+1, line)
 		}
 		fmt.Fprint(&buf, "\n")
+		pdfPageBreak(&buf)
 	}
 
 	if len(awards) > 0 {
@@ -246,6 +252,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 			fmt.Fprintf(&buf, "- %s\n", line)
 		}
 		fmt.Fprint(&buf, "\n")
+		pdfPageBreak(&buf)
 	}
 
 	if longest := stats.getTopLongest(maxLongestMessages); len(longest) > 0 {
