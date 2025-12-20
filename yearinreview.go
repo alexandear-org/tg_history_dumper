@@ -20,6 +20,7 @@ const (
 	minWordLength      = 4
 	maxLeaderboardSize = 20
 	maxReactedMessages = 10
+	maxTopEmojis       = 15
 )
 
 var (
@@ -235,7 +236,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 		fmt.Fprint(&buf, "\n")
 	}
 
-	if headerEmoji, tokens := stats.topEmojis(10); len(tokens) > 0 {
+	if headerEmoji, tokens := stats.topEmojis(maxTopEmojis); len(tokens) > 0 {
 		fmt.Fprintf(&buf, "## 😊 Топ емодзі %s\n\n", headerEmoji)
 		fmt.Fprintf(&buf, "`%s`\n\n", strings.Join(tokens, " "))
 	}
