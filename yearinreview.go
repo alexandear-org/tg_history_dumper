@@ -123,7 +123,9 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	participants := stats.participantCount()
 	total = stats.totalMessages
 	month, monthCount := stats.mostActiveMonth()
+	leastMonth, leastMonthCount := stats.leastActiveMonth()
 	day, dayCount := stats.mostActiveDay()
+	leastDay, leastDayCount := stats.leastActiveDay()
 	weekday, weekdayCount := stats.mostActiveWeekday()
 	hour, hourCount := stats.peakHour()
 	median := stats.medianMsgsPerPerson()
@@ -140,12 +142,28 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 			monthLabel = fmt.Sprintf("[%s](%s)", monthsFullUA[month], monthLink)
 		}
 	}
+	leastMonthLabel := "n/a"
+	if leastMonthCount > 0 {
+		leastMonthLabel = fmt.Sprintf("%s (%d пов.)", monthsFullUA[leastMonth], leastMonthCount)
+		if chatID, msgID, found := stats.firstMessageOfMonth(leastMonth); found {
+			monthLink := formatMessageLink(chatID, msgID)
+			leastMonthLabel = fmt.Sprintf("[%s](%s) (%d пов.)", monthsFullUA[leastMonth], monthLink, leastMonthCount)
+		}
+	}
 	dayLabel := "n/a"
 	if dayCount > 0 {
 		dayLabel = fmt.Sprintf("%d %s", day.Day(), monthsUA[day.Month()])
 		if chatID, msgID, found := stats.firstMessageOfDay(day); found {
 			dayLink := formatMessageLink(chatID, msgID)
 			dayLabel = fmt.Sprintf("[%d %s](%s)", day.Day(), monthsUA[day.Month()], dayLink)
+		}
+	}
+	leastDayLabel := "n/a"
+	if leastDayCount > 0 {
+		leastDayLabel = fmt.Sprintf("%d %s (%d пов.)", leastDay.Day(), monthsUA[leastDay.Month()], leastDayCount)
+		if chatID, msgID, found := stats.firstMessageOfDay(leastDay); found {
+			dayLink := formatMessageLink(chatID, msgID)
+			leastDayLabel = fmt.Sprintf("[%d %s](%s) (%d пов.)", leastDay.Day(), monthsUA[leastDay.Month()], dayLink, leastDayCount)
 		}
 	}
 	weekdayLabel := "n/a"
@@ -177,7 +195,9 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 		fmt.Fprintf(&buf, "- **Приєдналися: %d:** %s\n", len(joinedNames), strings.Join(joinedNames, ", "))
 	}
 	fmt.Fprintf(&buf, "- **Найгарячіший місяць:** %s (%d пов.)\n", monthLabel, monthCount)
+	fmt.Fprintf(&buf, "- **Найспокійніший місяць:** %s\n", leastMonthLabel)
 	fmt.Fprintf(&buf, "- **Найгарячіший день:** %s (%d пов.)\n", dayLabel, dayCount)
+	fmt.Fprintf(&buf, "- **Найспокійніший день:** %s\n", leastDayLabel)
 	fmt.Fprintf(&buf, "- **Найактивніший день тижня:** %s (%d пов.)\n", weekdayLabel, weekdayCount)
 	fmt.Fprintf(&buf, "- **Піковий час:** %s (%d пов.)\n", hourLabel, hourCount)
 	fmt.Fprintf(&buf, "- **Медіана повідомлень на людину:** %.1f\n", median)
@@ -567,6 +587,21 @@ func (s *yearStats) mostActiveMonth() (time.Month, int) {
 	return maxMonth, maxCount
 }
 
+func (s *yearStats) leastActiveMonth() (time.Month, int) {
+	if len(s.monthCount) == 0 {
+		return time.Month(0), 0
+	}
+	minMonth := time.Month(0)
+	minCount := -1
+	for m, c := range s.monthCount {
+		if minCount == -1 || c < minCount || (c == minCount && (minMonth == 0 || m < minMonth)) {
+			minMonth = m
+			minCount = c
+		}
+	}
+	return minMonth, minCount
+}
+
 func (s *yearStats) mostActiveDay() (time.Time, int) {
 	var maxDay time.Time
 	maxCount := 0
@@ -577,6 +612,21 @@ func (s *yearStats) mostActiveDay() (time.Time, int) {
 		}
 	}
 	return maxDay, maxCount
+}
+
+func (s *yearStats) leastActiveDay() (time.Time, int) {
+	if len(s.dayCount) == 0 {
+		return time.Time{}, 0
+	}
+	var minDay time.Time
+	minCount := -1
+	for d, c := range s.dayCount {
+		if minCount == -1 || c < minCount || (c == minCount && (minDay.IsZero() || d.Before(minDay))) {
+			minDay = d
+			minCount = c
+		}
+	}
+	return minDay, minCount
 }
 
 func (s *yearStats) firstMessageOfMonth(month time.Month) (chatID int64, msgID int32, found bool) {
