@@ -234,11 +234,9 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 			name := formatUserName(userCache, lm.userID)
 			nameLink := formatUserLink(userCache, lm.userID, name)
 			msgLink := formatMessageLink(lm.chatID, lm.msgID)
-			d := lm.date.UTC()
-			dateStr := fmt.Sprintf("%d %s %02d:%02d", d.Day(), monthsUA[d.Month()], d.Hour(), d.Minute())
+			dateStr := formatDateTimeUA(lm.date)
 			fmt.Fprintf(&buf, "**%s** [_%s_](%s) — %s симв.\n\n", nameLink, dateStr, msgLink, formatThousands(lm.chars))
-			preview := truncatePreview(lm.text, maxPreviewRunes)
-			fmt.Fprintf(&buf, "> %s\n\n", strings.ReplaceAll(preview, "\n", "\n> "))
+			fmt.Fprintf(&buf, "> %s\n\n", formatMessagePreview(lm.text, maxPreviewRunes))
 		}
 	}
 
@@ -248,11 +246,9 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 			name := formatUserName(userCache, rm.userID)
 			nameLink := formatUserLink(userCache, rm.userID, name)
 			msgLink := formatMessageLink(rm.chatID, rm.msgID)
-			d := rm.date.UTC()
-			dateStr := fmt.Sprintf("%d %s %02d:%02d", d.Day(), monthsUA[d.Month()], d.Hour(), d.Minute())
+			dateStr := formatDateTimeUA(rm.date)
 			fmt.Fprintf(&buf, "%d. **%s** [_%s_](%s) — %d реакцій\n\n", i+1, nameLink, dateStr, msgLink, rm.reactionCount)
-			preview := truncatePreview(rm.text, maxPreviewRunes)
-			fmt.Fprintf(&buf, "> %s\n\n", strings.ReplaceAll(preview, "\n", "\n> "))
+			fmt.Fprintf(&buf, "> %s\n\n", formatMessagePreview(rm.text, maxPreviewRunes))
 		}
 	}
 
@@ -1144,6 +1140,18 @@ func formatUserLink(reader *ChatCachedReader[UserData], id int64, displayName st
 		return fmt.Sprintf("[%s](https://t.me/%s)", displayName, *user.Username)
 	}
 	return displayName
+}
+
+// formatDateTimeUA formats a time as "15 гру 10:20" in Ukrainian.
+func formatDateTimeUA(t time.Time) string {
+	d := t.UTC()
+	return fmt.Sprintf("%d %s %02d:%02d", d.Day(), monthsUA[d.Month()], d.Hour(), d.Minute())
+}
+
+// formatMessagePreview formats a message preview as quoted text.
+func formatMessagePreview(text string, maxRunes int) string {
+	preview := truncatePreview(text, maxRunes)
+	return strings.ReplaceAll(preview, "\n", "\n> ")
 }
 
 // formatMessageLink returns a Telegram link to the message.
