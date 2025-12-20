@@ -843,7 +843,7 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 		awards = append(awards, fmt.Sprintf("📝 Найбільше слів: %s — %d слів", formatUserLink(reader, maxWordsID, formatUserName(reader, maxWordsID)), maxWordsCount))
 	}
 	if maxEmojiID != 0 {
-		awards = append(awards, fmt.Sprintf("😂 Мотор емодзі: %s — %d емодзі", formatUserLink(reader, maxEmojiID, formatUserName(reader, maxEmojiID)), maxEmojiCount))
+		awards = append(awards, fmt.Sprintf("😂 Емодзінатор (найбільше поставлених емодзі): %s — %d емодзі", formatUserLink(reader, maxEmojiID, formatUserName(reader, maxEmojiID)), maxEmojiCount))
 	}
 	if maxAvgID != 0 {
 		awards = append(awards, fmt.Sprintf("📚 Есеїст (найдовші повідомлення в середньому): %s — %.1f симв./повід.", formatUserLink(reader, maxAvgID, formatUserName(reader, maxAvgID)), maxAvg))
@@ -852,7 +852,7 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 		awards = append(awards, fmt.Sprintf("🕵️ Тихоня (найменше повідомлень): %s — %d", formatUserLink(reader, minMsgID, formatUserName(reader, minMsgID)), minMsgCount))
 	}
 	if maxLinksID != 0 {
-		awards = append(awards, fmt.Sprintf("🔗 Пруфер (найбільше лінків): %s — %d", formatUserLink(reader, maxLinksID, formatUserName(reader, maxLinksID)), maxLinksCount))
+		awards = append(awards, fmt.Sprintf("🔗 Пруфер (найбільше надісланих лінків): %s — %d", formatUserLink(reader, maxLinksID, formatUserName(reader, maxLinksID)), maxLinksCount))
 	}
 	if maxForwardID != 0 {
 		awards = append(awards, fmt.Sprintf("📨 Форвардер: %s — %d пересилок", formatUserLink(reader, maxForwardID, formatUserName(reader, maxForwardID)), maxForwardCount))
