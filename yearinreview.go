@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 	"unicode"
-
-	"github.com/ansel1/merry/v2"
 )
 
 const (
@@ -71,17 +69,17 @@ var (
 func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (string, error) {
 	chatEntries, err := saver.ReadSavedChatsList()
 	if err != nil {
-		return "", merry.Wrap(err)
+		return "", err
 	}
 
 	userReader := NewChatSyncReader[UserData](saver.usersFPath())
 	chatReader := NewChatSyncReader[ChatData](saver.chatsFPath())
 
 	if err := userReader.UpdateOffsets(); err != nil {
-		return "", merry.Wrap(err)
+		return "", err
 	}
 	if err := chatReader.UpdateOffsets(); err != nil {
-		return "", merry.Wrap(err)
+		return "", err
 	}
 
 	chatsMsgReader := &ChatsMessageReader{}
@@ -98,7 +96,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 
 		title, err := server.readChatTitle(userReader, chatReader, chatEntry.ID, chatEntry.FSTitle)
 		if err != nil {
-			return "", merry.Wrap(err)
+			return "", err
 		}
 		if chatID != 0 {
 			headerTitle = title
@@ -106,7 +104,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 
 		msgs, err := messagesInYear(chatsMsgReader, chatEntry.FPath, year)
 		if err != nil {
-			return "", merry.Wrap(err)
+			return "", err
 		}
 		if len(msgs) == 0 {
 			continue
@@ -286,7 +284,7 @@ func messagesInYear(r *ChatsMessageReader, chatPath string, year int) ([]map[str
 	for {
 		msgs, hasNext, err := r.Read(chatPath, offset, limit)
 		if err != nil {
-			return nil, merry.Wrap(err)
+			return nil, err
 		}
 
 		for _, m := range msgs {
