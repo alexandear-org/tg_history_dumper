@@ -315,6 +315,7 @@ type yearStats struct {
 	forwardCount       map[int64]int
 	instagramLinkCount map[int64]int
 	youtubeLinkCount   map[int64]int
+	loveEmojiCount     map[int64]int
 	reactionsReceived  map[int64]int
 	reactionsSent      map[int64]int
 	emojiCounts        map[string]int
@@ -362,6 +363,7 @@ func newYearStats() *yearStats {
 		forwardCount:       make(map[int64]int),
 		instagramLinkCount: make(map[int64]int),
 		youtubeLinkCount:   make(map[int64]int),
+		loveEmojiCount:     make(map[int64]int),
 		reactionsReceived:  make(map[int64]int),
 		reactionsSent:      make(map[int64]int),
 		emojiCounts:        make(map[string]int),
@@ -438,6 +440,9 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 			s.participantEmoji[userID] += countEmojis(text)
 			for _, e := range emojiRegexp.FindAllString(text, -1) {
 				s.emojiCounts[e]++
+				if isLoveEmoji(e) {
+					s.loveEmojiCount[userID]++
+				}
 			}
 			s.linkCount[userID] += countLinks(text)
 			// Count Instagram and YouTube links
@@ -828,6 +833,7 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	maxForwardID, maxForwardCount := topByIntMap(s.forwardCount, false)
 	maxInstagramID, maxInstagramCount := topByIntMap(s.instagramLinkCount, false)
 	maxYoutubeID, maxYoutubeCount := topByIntMap(s.youtubeLinkCount, false)
+	maxLoveID, maxLoveCount := topByIntMap(s.loveEmojiCount, false)
 
 	maxAvgID, maxAvg := topAvgChars(s.participantChars, s.participantMsgs)
 
@@ -858,6 +864,9 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	}
 	if maxYoutubeID != 0 {
 		awards = append(awards, fmt.Sprintf("🎬 Ютубер: %s — %d лінків на YouTube", formatUserLink(reader, maxYoutubeID, formatUserName(reader, maxYoutubeID)), maxYoutubeCount))
+	}
+	if maxLoveID != 0 {
+		awards = append(awards, fmt.Sprintf("💕 Закоханий: %s — %d емодзі любові", formatUserLink(reader, maxLoveID, formatUserName(reader, maxLoveID)), maxLoveCount))
 	}
 	return awards
 }
@@ -1288,4 +1297,38 @@ func splitWords(s string) []string {
 	}
 	flush()
 	return words
+}
+
+// isLoveEmoji checks if an emoji is a love/heart emoji
+func isLoveEmoji(emoji string) bool {
+	loveEmojis := map[string]bool{
+		"❤️": true,
+		"❤":  true,
+		"♥️": true,
+		"♥":  true,
+		"💕":  true,
+		"💖":  true,
+		"💗":  true,
+		"💘":  true,
+		"💙":  true,
+		"💚":  true,
+		"💛":  true,
+		"💜":  true,
+		"🖤":  true,
+		"🤍":  true,
+		"🤎":  true,
+		"❣️": true,
+		"❣":  true,
+		"💞":  true,
+		"💓":  true,
+		"💟":  true,
+		"💝":  true,
+		"🧡":  true,
+		"💌":  true,
+		"😍":  true,
+		"🥰":  true,
+		"😘":  true,
+		"😻":  true,
+	}
+	return loveEmojis[emoji]
 }
