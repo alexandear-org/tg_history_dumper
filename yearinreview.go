@@ -523,7 +523,7 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 
 	action, ok := msg["Action"].(map[string]any)
 	if ok {
-		joins, leaves := extractActionUserIDs(action)
+		joins, leaves := extractActionUserIDs(action, msgAuthor)
 		msgID := int32(0)
 		if mid, ok := msg["ID"].(float64); ok {
 			msgID = int32(mid)
@@ -1016,15 +1016,19 @@ func topAvgChars(chars map[int64]int, msgs map[int64]int) (int64, float64) {
 	return bestID, bestAvg
 }
 
-func extractActionUserIDs(action map[string]any) (joins []int64, leaves []int64) {
+func extractActionUserIDs(action map[string]any, msgAuthor int64) (joins []int64, leaves []int64) {
 	switch action["_"] {
-	case "TL_messageActionChatAddUser", "TL_messageActionInviteToChannel":
+	case "TL_messageActionChatAddUser":
 		joins = append(joins, parseIDs(action["Users"])...)
 		if id, ok := parseID(action["UserID"]); ok {
 			joins = append(joins, id)
 		}
-	case "TL_messageActionChatJoinedByLink", "TL_messageActionChatJoinedByRequest":
-		if id, ok := parseID(action["UserID"]); ok {
+	case "TL_messageActionChatJoinedByLink":
+		joins = append(joins, parseIDs(action["Users"])...)
+		// Joined by link: actual joiner is the message author (FromID). Fallback to UserID if present.
+		if msgAuthor != 0 {
+			joins = append(joins, msgAuthor)
+		} else if id, ok := parseID(action["UserID"]); ok {
 			joins = append(joins, id)
 		}
 	case "TL_messageActionChatDeleteUser":
