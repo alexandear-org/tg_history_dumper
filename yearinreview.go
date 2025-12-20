@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -20,7 +19,6 @@ const (
 	minWordLength      = 4
 	maxLeaderboardSize = 20
 	maxReactedMessages = 10
-	maxTopEmojis       = 15
 )
 
 var (
@@ -241,11 +239,6 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 		fmt.Fprint(&buf, "\n")
 	}
 
-	if headerEmoji, tokens := stats.topEmojis(maxTopEmojis); len(tokens) > 0 {
-		fmt.Fprintf(&buf, "## 😊 Топ емодзі %s\n\n", headerEmoji)
-		fmt.Fprintf(&buf, "`%s`\n\n", strings.Join(tokens, " "))
-	}
-
 	if topWords := stats.topWords(20); len(topWords) > 0 {
 		fmt.Fprint(&buf, "## 📝 Топ слів (без поширених стоп-слів)\n\n")
 		for _, line := range topWords {
@@ -320,12 +313,10 @@ type yearStats struct {
 	participantMsgs    map[int64]int
 	participantChars   map[int64]int
 	participantWords   map[int64]int
-	participantEmoji   map[int64]int
 	linkCount          map[int64]int
 	forwardCount       map[int64]int
 	instagramLinkCount map[int64]int
 	youtubeLinkCount   map[int64]int
-	loveEmojiCount     map[int64]int
 	reactionsReceived  map[int64]int
 	reactionsSent      map[int64]int
 	emojiCounts        map[string]int
@@ -358,12 +349,10 @@ func newYearStats() *yearStats {
 		participantMsgs:    make(map[int64]int),
 		participantChars:   make(map[int64]int),
 		participantWords:   make(map[int64]int),
-		participantEmoji:   make(map[int64]int),
 		linkCount:          make(map[int64]int),
 		forwardCount:       make(map[int64]int),
 		instagramLinkCount: make(map[int64]int),
 		youtubeLinkCount:   make(map[int64]int),
-		loveEmojiCount:     make(map[int64]int),
 		reactionsReceived:  make(map[int64]int),
 		reactionsSent:      make(map[int64]int),
 		emojiCounts:        make(map[string]int),
@@ -410,13 +399,6 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 			charLen := len([]rune(text))
 			s.participantChars[userID] += charLen
 			s.participantWords[userID] += len(strings.Fields(text))
-			s.participantEmoji[userID] += countEmojis(text)
-			for _, e := range emojiRegexp.FindAllString(text, -1) {
-				s.emojiCounts[e]++
-				if isLoveEmoji(e) {
-					s.loveEmojiCount[userID]++
-				}
-			}
 			s.linkCount[userID] += countLinks(text)
 			// Count Instagram and YouTube links
 			for _, domain := range instagramDomains {
@@ -745,35 +727,6 @@ func (s *yearStats) leaderboard(reader *ChatCachedReader[UserData], limit int) [
 	return res
 }
 
-func (s *yearStats) topEmojis(limit int) (headerEmoji string, tokens []string) {
-	if len(s.emojiCounts) == 0 {
-		return "", nil
-	}
-	type pair struct {
-		emoji string
-		count int
-	}
-	arr := make([]pair, 0, len(s.emojiCounts))
-	for e, c := range s.emojiCounts {
-		arr = append(arr, pair{emoji: e, count: c})
-	}
-	slices.SortFunc(arr, func(a, b pair) int {
-		if a.count != b.count {
-			return cmp.Compare(b.count, a.count)
-		}
-		return cmp.Compare(a.emoji, b.emoji)
-	})
-	if limit > 0 && len(arr) > limit {
-		arr = arr[:limit]
-	}
-	tokens = make([]string, len(arr))
-	for i, p := range arr {
-		tokens[i] = fmt.Sprintf("%s×%d", p.emoji, p.count)
-	}
-	headerEmoji = arr[0].emoji
-	return headerEmoji, tokens
-}
-
 func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	if len(s.participantMsgs) == 0 {
 		return nil
@@ -781,13 +734,11 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 
 	maxMsgID, maxMsgCount := topByIntMap(s.participantMsgs, false)
 	maxWordsID, maxWordsCount := topByIntMap(s.participantWords, false)
-	maxEmojiID, maxEmojiCount := topByIntMap(s.participantEmoji, false)
 	minMsgID, minMsgCount := topByIntMap(s.participantMsgs, true)
 	maxLinksID, maxLinksCount := topByIntMap(s.linkCount, false)
 	maxForwardID, maxForwardCount := topByIntMap(s.forwardCount, false)
 	maxInstagramID, maxInstagramCount := topByIntMap(s.instagramLinkCount, false)
 	maxYoutubeID, maxYoutubeCount := topByIntMap(s.youtubeLinkCount, false)
-	maxLoveID, maxLoveCount := topByIntMap(s.loveEmojiCount, false)
 
 	maxAvgID, maxAvg := topAvgChars(s.participantChars, s.participantMsgs)
 
@@ -797,9 +748,6 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	}
 	if maxWordsID != 0 {
 		awards = append(awards, fmt.Sprintf("📝 Найбільше слів: %s — %d слів", formatUserLink(reader, maxWordsID, formatUserName(reader, maxWordsID)), maxWordsCount))
-	}
-	if maxEmojiID != 0 {
-		awards = append(awards, fmt.Sprintf("😂 Емодзінатор (найбільше поставлених емодзі): %s — %d емодзі", formatUserLink(reader, maxEmojiID, formatUserName(reader, maxEmojiID)), maxEmojiCount))
 	}
 	if maxAvgID != 0 {
 		awards = append(awards, fmt.Sprintf("📚 Есеїст (найдовші повідомлення в середньому): %s — %.1f симв./повід.", formatUserLink(reader, maxAvgID, formatUserName(reader, maxAvgID)), maxAvg))
@@ -818,9 +766,6 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	}
 	if maxYoutubeID != 0 {
 		awards = append(awards, fmt.Sprintf("🎬 Ютубер: %s — %d лінків на YouTube", formatUserLink(reader, maxYoutubeID, formatUserName(reader, maxYoutubeID)), maxYoutubeCount))
-	}
-	if maxLoveID != 0 {
-		awards = append(awards, fmt.Sprintf("💕 Закоханий: %s — %d емодзі любові", formatUserLink(reader, maxLoveID, formatUserName(reader, maxLoveID)), maxLoveCount))
 	}
 	return awards
 }
@@ -981,12 +926,6 @@ func topAvgChars(chars map[int64]int, msgs map[int64]int) (int64, float64) {
 		}
 	}
 	return bestID, bestAvg
-}
-
-var emojiRegexp = regexp.MustCompile(`[\x{1F300}-\x{1F6FF}\x{1F900}-\x{1F9FF}\x{1FA70}-\x{1FAFF}\x{1F600}-\x{1F64F}][\x{1F3FB}-\x{1F3FF}\x{FE0E}\x{FE0F}\x{200D}]*`)
-
-func countEmojis(text string) int {
-	return len(emojiRegexp.FindAllString(text, -1))
 }
 
 func extractActionUserIDs(action map[string]any) (joins []int64, leaves []int64) {
@@ -1335,34 +1274,4 @@ func formatStrippedImageDataURI(strippedB64 string) string {
 	// Convert to base64 and create data URI
 	fullB64 := base64.StdEncoding.EncodeToString(fullJPEG)
 	return "data:image/jpeg;base64," + fullB64
-}
-
-// isLoveEmoji checks if an emoji is a love/heart emoji
-func isLoveEmoji(emoji string) bool {
-	loveEmojis := map[string]bool{
-		"❤️": true,
-		"❤":  true,
-		"♥️": true,
-		"♥":  true,
-		"💕":  true,
-		"💖":  true,
-		"💗":  true,
-		"💘":  true,
-		"💙":  true,
-		"💚":  true,
-		"💛":  true,
-		"💜":  true,
-		"🖤":  true,
-		"🤍":  true,
-		"🤎":  true,
-		"❣️": true,
-		"❣":  true,
-		"💞":  true,
-		"💓":  true,
-		"💟":  true,
-		"💝":  true,
-		"🧡":  true,
-		"💌":  true,
-	}
-	return loveEmojis[emoji]
 }
