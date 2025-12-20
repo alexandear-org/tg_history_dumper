@@ -305,3 +305,67 @@ Related users and chats (aka peers) are saved to `history/users` and `history/ch
 Lines are added not only when new peer is encountered but also when existing peer data (title for example) has changed compared to previous dump. So same users/chats may appear multiple times there. The last record for each id is the most recent one.
 
 This applies only to users/chats *own* fields (name, phone, etc.). History messages are saved only once, edit/deletion is not detected.
+
+### Year In Review
+
+Written with Copilot.
+
+#### How to generate it for your chat
+
+1. Find the <CHAT_ID>.
+
+Create `config.json`:
+
+```json
+{
+    "app_id": <APP_ID>,
+    "app_hash": "<APP_HASH>",
+}
+```
+
+Run the command:
+
+```sh
+go run . -list-chats
+```
+
+2. Export chat history:
+
+Extend `config.json`:
+
+```json
+{
+    "app_id": <APP_ID>,
+    "app_hash": "<APP_HASH>",
+    "out_dir_path": "history",
+    "history": [
+        {"id": <CHAT_ID>}
+    ],
+    "stories": "none",
+    "media": "none",
+    "history_limit": {
+        "1000000": [
+            "all"
+        ]
+    },
+    "dump_account": "off",
+    "dump_contacts": "off",
+    "dump_sessions": "off"
+}
+```
+
+Run the command:
+
+```sh
+go run .
+```
+
+3. Generate the Markdown document.
+
+Run the command:
+
+```sh
+go run . -config config.json -year-in-review -review-year 2025 -review-chat-id <CHAT_ID> > "2025_yearinreview_<CHAT_NAME>.md"
+```
+
+3. Use the [Markdown Preview Enhanced](https://marketplace.visualstudio.com/items?itemName=shd101wyy.markdown-preview-enhanced) extension for VS Code to convert the Markdown file to HTML.
