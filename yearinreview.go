@@ -308,6 +308,11 @@ func messagesInYear(r *ChatsMessageReader, chatPath string, year int) ([]map[str
 	}
 }
 
+type reactionCount struct {
+	emoji string
+	count int
+}
+
 type yearStats struct {
 	totalMessages      int
 	participantMsgs    map[int64]int
@@ -317,7 +322,7 @@ type yearStats struct {
 	forwardCount       map[int64]int
 	instagramLinkCount map[int64]int
 	youtubeLinkCount   map[int64]int
-	reactionsReceived  map[int64]int
+	reactionsReceived  map[int64][]reactionCount
 	reactionsSent      map[int64]int
 	emojiCounts        map[string]int
 	wordCounts         map[string]int
@@ -353,7 +358,7 @@ func newYearStats() *yearStats {
 		forwardCount:       make(map[int64]int),
 		instagramLinkCount: make(map[int64]int),
 		youtubeLinkCount:   make(map[int64]int),
-		reactionsReceived:  make(map[int64]int),
+		reactionsReceived:  make(map[int64][]reactionCount),
 		reactionsSent:      make(map[int64]int),
 		emojiCounts:        make(map[string]int),
 		wordCounts:         make(map[string]int),
@@ -434,17 +439,29 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 	msgAuthor, msgAuthorOk := extractUserID(msg)
 	if reactionsData, ok := msg["Reactions"]; ok && reactionsData != nil {
 		if reactionsMap, ok := reactionsData.(map[string]any); ok {
-			var reactionCount int
+			totalReactions := 0
+			emojiBuckets := make(map[string]int)
+			countedFromResults := false
 			// Sum all reactions (Results can contain counts per reaction type)
-			if results, ok := reactionsMap["Results"].([]any); ok {
+			if results, ok := reactionsMap["Results"].([]any); ok && len(results) > 0 {
+				countedFromResults = true
 				for _, r := range results {
 					if rm, ok := r.(map[string]any); ok {
+						count := 1
 						if c, ok := rm["Count"].(float64); ok {
-							reactionCount += int(c)
-							continue
+							count = int(c)
 						}
+						totalReactions += count
+						if reactionObj, ok := rm["Reaction"].(map[string]any); ok {
+							if emoticon, ok := reactionObj["Emoticon"].(string); ok && emoticon != "" {
+								emojiBuckets[emoticon] += count
+							} else if emoticon, ok := reactionObj["emoticon"].(string); ok && emoticon != "" {
+								emojiBuckets[emoticon] += count
+							}
+						}
+						continue
 					}
-					reactionCount++
+					totalReactions++
 				}
 			}
 			// Extract RecentReactions array which contains who reacted
@@ -465,34 +482,40 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 						if senderID != 0 {
 							s.reactionsSent[senderID]++
 						}
+
+						// If Results were absent/empty, count each recent reaction
+						if !countedFromResults {
+							totalReactions++
+							if reactionObj, ok := rxnMap["Reaction"].(map[string]any); ok {
+								if emoticon, ok := reactionObj["Emoticon"].(string); ok && emoticon != "" {
+									emojiBuckets[emoticon]++
+								} else if emoticon, ok := reactionObj["emoticon"].(string); ok && emoticon != "" {
+									emojiBuckets[emoticon]++
+								}
+							}
+						}
 					}
 				}
-				if reactionCount == 0 {
-					// Fallback to recent reactions count if Results absent
-					if recentReactions, ok := reactionsMap["RecentReactions"].([]any); ok {
-						reactionCount = len(recentReactions)
-					}
+			}
+			if totalReactions > 0 && msgAuthorOk {
+				s.addReactionsReceived(msgAuthor, emojiBuckets)
+			}
+			// Track message reactions for top reacted messages
+			if totalReactions > 0 && msgAuthorOk {
+				msgKey := fmt.Sprintf("%d:%d", chatID, msg["ID"])
+				msgText := ""
+				if text, ok := msg["Message"].(string); ok {
+					msgText = text
 				}
-				if reactionCount > 0 && msgAuthorOk {
-					s.reactionsReceived[msgAuthor] += reactionCount
-				}
-				// Track message reactions for top reacted messages
-				if reactionCount > 0 && msgAuthorOk {
-					msgKey := fmt.Sprintf("%d:%d", chatID, msg["ID"])
-					msgText := ""
-					if text, ok := msg["Message"].(string); ok {
-						msgText = text
-					}
-					strippedImg := extractStrippedImageBytes(msg)
-					s.messageReactions[msgKey] = msgReaction{
-						chatID:            chatID,
-						msgID:             int32(msg["ID"].(float64)),
-						userID:            msgAuthor,
-						text:              msgText,
-						date:              date,
-						reactionCount:     reactionCount,
-						strippedImageData: strippedImg,
-					}
+				strippedImg := extractStrippedImageBytes(msg)
+				s.messageReactions[msgKey] = msgReaction{
+					chatID:            chatID,
+					msgID:             int32(msg["ID"].(float64)),
+					userID:            msgAuthor,
+					text:              msgText,
+					date:              date,
+					reactionCount:     totalReactions,
+					strippedImageData: strippedImg,
 				}
 			}
 		}
@@ -637,8 +660,69 @@ func (s *yearStats) namesWithDates(reader *ChatCachedReader[UserData], ids map[i
 	return slices.Sorted(slices.Values(res))
 }
 
+func (s *yearStats) addReactionsReceived(userID int64, emojiCounts map[string]int) {
+	if len(emojiCounts) == 0 {
+		return
+	}
+
+	merged := make(map[string]int)
+	for _, rc := range s.reactionsReceived[userID] {
+		merged[rc.emoji] += rc.count
+	}
+	for emoji, c := range emojiCounts {
+		if c == 0 {
+			continue
+		}
+		merged[emoji] += c
+	}
+
+	res := make([]reactionCount, 0, len(merged))
+	for emoji, c := range merged {
+		res = append(res, reactionCount{emoji: emoji, count: c})
+	}
+	slices.SortFunc(res, func(a, b reactionCount) int {
+		if a.count != b.count {
+			return cmp.Compare(b.count, a.count)
+		}
+		return cmp.Compare(a.emoji, b.emoji)
+	})
+
+	s.reactionsReceived[userID] = res
+}
+
+func (s *yearStats) topReactionByEmoji(emoji string) (int64, int) {
+	var bestID int64
+	bestCount := 0
+	for id, list := range s.reactionsReceived {
+		total := 0
+		for _, rc := range list {
+			if rc.emoji == emoji {
+				total += rc.count
+			}
+		}
+		if total > bestCount || (total == bestCount && total > 0 && (bestID == 0 || id < bestID)) {
+			bestID = id
+			bestCount = total
+		}
+	}
+	return bestID, bestCount
+}
+
 func (s *yearStats) reactionReceivedLeaderboard(reader *ChatCachedReader[UserData], limit int) []string {
-	return s.buildReactionLeaderboard(reader, s.reactionsReceived, limit)
+	if len(s.reactionsReceived) == 0 {
+		return nil
+	}
+
+	totals := make(map[int64]int, len(s.reactionsReceived))
+	for id, rcs := range s.reactionsReceived {
+		total := 0
+		for _, rc := range rcs {
+			total += rc.count
+		}
+		totals[id] = total
+	}
+
+	return s.buildReactionLeaderboard(reader, totals, limit)
 }
 
 func (s *yearStats) reactionSentLeaderboard(reader *ChatCachedReader[UserData], limit int) []string {
@@ -739,6 +823,7 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	maxForwardID, maxForwardCount := topByIntMap(s.forwardCount, false)
 	maxInstagramID, maxInstagramCount := topByIntMap(s.instagramLinkCount, false)
 	maxYoutubeID, maxYoutubeCount := topByIntMap(s.youtubeLinkCount, false)
+	maxFireID, maxFireCount := s.topReactionByEmoji("🔥")
 
 	maxAvgID, maxAvg := topAvgChars(s.participantChars, s.participantMsgs)
 
@@ -766,6 +851,9 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	}
 	if maxYoutubeID != 0 {
 		awards = append(awards, fmt.Sprintf("🎬 Ютубер: %s — %d лінків на YouTube", formatUserLink(reader, maxYoutubeID, formatUserName(reader, maxYoutubeID)), maxYoutubeCount))
+	}
+	if maxFireID != 0 {
+		awards = append(awards, fmt.Sprintf("🔥 Прометей (найбільше отриманих вогнів): %s — %d", formatUserLink(reader, maxFireID, formatUserName(reader, maxFireID)), maxFireCount))
 	}
 	return awards
 }
