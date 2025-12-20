@@ -248,7 +248,9 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 			name := formatUserName(userCache, rm.userID)
 			nameLink := formatUserLink(userCache, rm.userID, name)
 			msgLink := formatMessageLink(rm.chatID, rm.msgID)
-			fmt.Fprintf(&buf, "%d. **%s** — %d реакцій — [переглянути](%s)\n\n", i+1, nameLink, rm.reactionCount, msgLink)
+			d := rm.date.UTC()
+			dateStr := fmt.Sprintf("%d %s %02d:%02d", d.Day(), monthsUA[d.Month()], d.Hour(), d.Minute())
+			fmt.Fprintf(&buf, "%d. **%s** [_%s_](%s) — %d реакцій\n\n", i+1, nameLink, dateStr, msgLink, rm.reactionCount)
 			preview := truncatePreview(rm.text, maxPreviewRunes)
 			fmt.Fprintf(&buf, "> %s\n\n", strings.ReplaceAll(preview, "\n", "\n> "))
 		}
@@ -328,6 +330,7 @@ type yearStats struct {
 		msgID         int32
 		userID        int64
 		text          string
+		date          time.Time
 		reactionCount int
 	}
 	longest []longMessage
@@ -374,6 +377,7 @@ func newYearStats() *yearStats {
 			msgID         int32
 			userID        int64
 			text          string
+			date          time.Time
 			reactionCount int
 		}),
 		longest: make([]longMessage, 0, maxLongestMessages),
@@ -508,12 +512,14 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 						msgID         int32
 						userID        int64
 						text          string
+						date          time.Time
 						reactionCount int
 					}{
 						chatID:        chatID,
 						msgID:         int32(msg["ID"].(float64)),
 						userID:        msgAuthor,
 						text:          msgText,
+						date:          date,
 						reactionCount: reactionCount,
 					}
 				}
@@ -870,6 +876,7 @@ func (s *yearStats) getTopReactedMessages(limit int) []struct {
 	msgID         int32
 	userID        int64
 	text          string
+	date          time.Time
 	reactionCount int
 } {
 	if len(s.messageReactions) == 0 {
@@ -880,6 +887,7 @@ func (s *yearStats) getTopReactedMessages(limit int) []struct {
 		msgID         int32
 		userID        int64
 		text          string
+		date          time.Time
 		reactionCount int
 	}
 	msgs := make([]msgReaction, 0, len(s.messageReactions))
@@ -889,6 +897,7 @@ func (s *yearStats) getTopReactedMessages(limit int) []struct {
 			msgID:         data.msgID,
 			userID:        data.userID,
 			text:          data.text,
+			date:          data.date,
 			reactionCount: data.reactionCount,
 		})
 	}
@@ -903,6 +912,7 @@ func (s *yearStats) getTopReactedMessages(limit int) []struct {
 		msgID         int32
 		userID        int64
 		text          string
+		date          time.Time
 		reactionCount int
 	}, len(msgs))
 	for i, m := range msgs {
@@ -911,12 +921,14 @@ func (s *yearStats) getTopReactedMessages(limit int) []struct {
 			msgID         int32
 			userID        int64
 			text          string
+			date          time.Time
 			reactionCount int
 		}{
 			chatID:        m.chatID,
 			msgID:         m.msgID,
 			userID:        m.userID,
 			text:          m.text,
+			date:          m.date,
 			reactionCount: m.reactionCount,
 		}
 	}
