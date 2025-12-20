@@ -319,37 +319,27 @@ type yearStats struct {
 	reactionsSent      map[int64]int
 	emojiCounts        map[string]int
 	wordCounts         map[string]int
-	joiners            map[int64]struct {
-		date   time.Time
-		chatID int64
-		msgID  int32
-	}
-	leavers map[int64]struct {
-		date   time.Time
-		chatID int64
-		msgID  int32
-	}
-	monthCount    map[time.Month]int
-	dayCount      map[time.Time]int
-	weekdayCount  map[time.Weekday]int
-	hourCount     map[int]int
-	firstMonthMsg map[time.Month]struct {
-		chatID int64
-		msgID  int32
-	}
-	firstDayMsg map[time.Time]struct {
-		chatID int64
-		msgID  int32
-	}
-	messageReactions map[string]struct {
-		chatID        int64
-		msgID         int32
-		userID        int64
-		text          string
-		date          time.Time
-		reactionCount int
-	}
-	longest []longMessage
+	joiners            map[int64]joinLeaveInfo
+	leavers            map[int64]joinLeaveInfo
+	monthCount         map[time.Month]int
+	dayCount           map[time.Time]int
+	weekdayCount       map[time.Weekday]int
+	hourCount          map[int]int
+	firstMonthMsg      map[time.Month]chatMsg
+	firstDayMsg        map[time.Time]chatMsg
+	messageReactions   map[string]msgReaction
+	longest            []longMessage
+}
+
+type joinLeaveInfo struct {
+	date   time.Time
+	chatID int64
+	msgID  int32
+}
+
+type chatMsg struct {
+	chatID int64
+	msgID  int32
 }
 
 func newYearStats() *yearStats {
@@ -367,37 +357,16 @@ func newYearStats() *yearStats {
 		reactionsSent:      make(map[int64]int),
 		emojiCounts:        make(map[string]int),
 		wordCounts:         make(map[string]int),
-		joiners: make(map[int64]struct {
-			date   time.Time
-			chatID int64
-			msgID  int32
-		}),
-		leavers: make(map[int64]struct {
-			date   time.Time
-			chatID int64
-			msgID  int32
-		}),
-		monthCount:   make(map[time.Month]int),
-		dayCount:     make(map[time.Time]int),
-		weekdayCount: make(map[time.Weekday]int),
-		hourCount:    make(map[int]int),
-		firstMonthMsg: make(map[time.Month]struct {
-			chatID int64
-			msgID  int32
-		}),
-		firstDayMsg: make(map[time.Time]struct {
-			chatID int64
-			msgID  int32
-		}),
-		messageReactions: make(map[string]struct {
-			chatID        int64
-			msgID         int32
-			userID        int64
-			text          string
-			date          time.Time
-			reactionCount int
-		}),
-		longest: make([]longMessage, 0, maxLongestMessages),
+		joiners:            make(map[int64]joinLeaveInfo),
+		leavers:            make(map[int64]joinLeaveInfo),
+		monthCount:         make(map[time.Month]int),
+		dayCount:           make(map[time.Time]int),
+		weekdayCount:       make(map[time.Weekday]int),
+		hourCount:          make(map[int]int),
+		firstMonthMsg:      make(map[time.Month]chatMsg),
+		firstDayMsg:        make(map[time.Time]chatMsg),
+		messageReactions:   make(map[string]msgReaction),
+		longest:            make([]longMessage, 0, maxLongestMessages),
 	}
 }
 
@@ -414,19 +383,13 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 	// Track first message of each month
 	if _, exists := s.firstMonthMsg[month]; !exists {
 		if msgID, ok := msg["ID"].(float64); ok {
-			s.firstMonthMsg[month] = struct {
-				chatID int64
-				msgID  int32
-			}{chatID: chatID, msgID: int32(msgID)}
+			s.firstMonthMsg[month] = chatMsg{chatID: chatID, msgID: int32(msgID)}
 		}
 	}
 
 	if _, exists := s.firstDayMsg[day]; !exists {
 		if msgID, ok := msg["ID"].(float64); ok {
-			s.firstDayMsg[day] = struct {
-				chatID int64
-				msgID  int32
-			}{chatID: chatID, msgID: int32(msgID)}
+			s.firstDayMsg[day] = chatMsg{chatID: chatID, msgID: int32(msgID)}
 		}
 	}
 
@@ -527,14 +490,7 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 					if text, ok := msg["Message"].(string); ok {
 						msgText = text
 					}
-					s.messageReactions[msgKey] = struct {
-						chatID        int64
-						msgID         int32
-						userID        int64
-						text          string
-						date          time.Time
-						reactionCount int
-					}{
+					s.messageReactions[msgKey] = msgReaction{
 						chatID:        chatID,
 						msgID:         int32(msg["ID"].(float64)),
 						userID:        msgAuthor,
@@ -556,20 +512,12 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 		}
 		for _, id := range joins {
 			if _, exists := s.joiners[id]; !exists {
-				s.joiners[id] = struct {
-					date   time.Time
-					chatID int64
-					msgID  int32
-				}{date: date, chatID: chatID, msgID: msgID}
+				s.joiners[id] = joinLeaveInfo{date: date, chatID: chatID, msgID: msgID}
 			}
 		}
 		for _, id := range leaves {
 			if _, exists := s.leavers[id]; !exists {
-				s.leavers[id] = struct {
-					date   time.Time
-					chatID int64
-					msgID  int32
-				}{date: date, chatID: chatID, msgID: msgID}
+				s.leavers[id] = joinLeaveInfo{date: date, chatID: chatID, msgID: msgID}
 			}
 		}
 	}
@@ -682,12 +630,7 @@ func (s *yearStats) medianMsgsPerPerson() float64 {
 	return float64(counts[mid-1]+counts[mid]) / 2
 }
 
-func (s *yearStats) namesWithDates(reader *ChatCachedReader[UserData], ids map[int64]struct {
-	date   time.Time
-	chatID int64
-	msgID  int32
-},
-) []string {
+func (s *yearStats) namesWithDates(reader *ChatCachedReader[UserData], ids map[int64]joinLeaveInfo) []string {
 	res := make([]string, 0, len(ids))
 	for id, info := range ids {
 		name := formatUserName(reader, id)
@@ -924,24 +867,18 @@ func (s *yearStats) getTopLongest(limit int) []longMessage {
 	return longest
 }
 
-func (s *yearStats) getTopReactedMessages(limit int) []struct {
+type msgReaction struct {
 	chatID        int64
 	msgID         int32
 	userID        int64
 	text          string
 	date          time.Time
 	reactionCount int
-} {
+}
+
+func (s *yearStats) getTopReactedMessages(limit int) []msgReaction {
 	if len(s.messageReactions) == 0 {
 		return nil
-	}
-	type msgReaction struct {
-		chatID        int64
-		msgID         int32
-		userID        int64
-		text          string
-		date          time.Time
-		reactionCount int
 	}
 	msgs := make([]msgReaction, 0, len(s.messageReactions))
 	for _, data := range s.messageReactions {
@@ -960,23 +897,9 @@ func (s *yearStats) getTopReactedMessages(limit int) []struct {
 	if limit > 0 && len(msgs) > limit {
 		msgs = msgs[:limit]
 	}
-	result := make([]struct {
-		chatID        int64
-		msgID         int32
-		userID        int64
-		text          string
-		date          time.Time
-		reactionCount int
-	}, len(msgs))
+	result := make([]msgReaction, len(msgs))
 	for i, m := range msgs {
-		result[i] = struct {
-			chatID        int64
-			msgID         int32
-			userID        int64
-			text          string
-			date          time.Time
-			reactionCount int
-		}{
+		result[i] = msgReaction{
 			chatID:        m.chatID,
 			msgID:         m.msgID,
 			userID:        m.userID,
