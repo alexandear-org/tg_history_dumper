@@ -199,7 +199,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	fmt.Fprintf(&buf, "- **Найспокійніший день:** %s\n", leastDayLabel)
 	fmt.Fprintf(&buf, "- **Найактивніший день тижня:** %s (%d пов.)\n", weekdayLabel, weekdayCount)
 	fmt.Fprintf(&buf, "- **Піковий час:** %s (%d пов.)\n", hourLabel, hourCount)
-	fmt.Fprintf(&buf, "- **Медіана повідомлень на людину:** %.1f\n", median)
+	fmt.Fprintf(&buf, "- **Медіана повідомлень на людину:** %d\n", int(median))
 	fmt.Fprint(&buf, "\n")
 
 	if len(leaderboard) > 0 {
