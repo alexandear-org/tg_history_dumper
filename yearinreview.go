@@ -1322,10 +1322,6 @@ func isLoveEmoji(emoji string) bool {
 		"💝":  true,
 		"🧡":  true,
 		"💌":  true,
-		"😍":  true,
-		"🥰":  true,
-		"😘":  true,
-		"😻":  true,
 	}
 	return loveEmojis[emoji]
 }
