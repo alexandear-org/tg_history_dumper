@@ -659,9 +659,8 @@ func (s *yearStats) mostActiveWeekday() (time.Weekday, int) {
 	return maxDay, maxCount
 }
 
-func (s *yearStats) peakHour() (int, int) {
-	maxHour := -1
-	maxCount := 0
+func (s *yearStats) peakHour() (maxHour int, maxCount int) {
+	maxHour = -1
 	for h, c := range s.hourCount {
 		if c > maxCount || (c == maxCount && (maxHour == -1 || h < maxHour)) {
 			maxHour = h
@@ -816,7 +815,7 @@ func (s *yearStats) topEmojis(limit int) (headerEmoji string, tokens []string) {
 		tokens[i] = fmt.Sprintf("%s×%d", p.emoji, p.count)
 	}
 	headerEmoji = arr[0].emoji
-	return
+	return headerEmoji, tokens
 }
 
 func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
@@ -1032,11 +1031,9 @@ func topByIntMap(m map[int64]int, wantMin bool) (int64, int) {
 				bestVal = val
 				bestID = id
 			}
-		} else {
-			if val > bestVal || (val == bestVal && (bestID == 0 || id < bestID)) {
-				bestVal = val
-				bestID = id
-			}
+		} else if val > bestVal || (val == bestVal && (bestID == 0 || id < bestID)) {
+			bestVal = val
+			bestID = id
 		}
 	}
 	return bestID, bestVal
@@ -1080,8 +1077,9 @@ func extractActionUserIDs(action map[string]any) (joins []int64, leaves []int64)
 		if id, ok := parseID(action["UserID"]); ok {
 			leaves = append(leaves, id)
 		}
+	default:
 	}
-	return
+	return joins, leaves
 }
 
 func parseIDs(val any) []int64 {
@@ -1127,7 +1125,7 @@ func parseID(val any) (int64, bool) {
 
 func countURLs(text string, domain string) int {
 	count := 0
-	for _, word := range strings.Fields(text) {
+	for word := range strings.FieldsSeq(text) {
 		if strings.Contains(word, domain) {
 			count++
 		}
@@ -1138,7 +1136,7 @@ func countURLs(text string, domain string) int {
 // countLinks returns count of words that look like URLs (basic http/https check).
 func countLinks(text string) int {
 	count := 0
-	for _, word := range strings.Fields(text) {
+	for word := range strings.FieldsSeq(text) {
 		if strings.HasPrefix(word, "http://") || strings.HasPrefix(word, "https://") {
 			count++
 		}
