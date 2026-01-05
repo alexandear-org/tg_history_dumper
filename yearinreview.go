@@ -88,7 +88,6 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 
 	stats := newYearStats()
 	userCache := &ChatCachedReader[UserData]{reader: userReader}
-	total := 0
 	headerTitle := ""
 	for _, chatEntry := range chatEntries {
 		if chatID != 0 && chatEntry.ID != chatID {
@@ -115,13 +114,12 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 			stats.addMessage(chatEntry.ID, msg)
 		}
 
-		total += len(msgs)
 	}
 
 	var buf strings.Builder
 
 	participants := stats.participantCount()
-	total = stats.totalMessages
+	total := stats.totalMessages
 	month, monthCount := stats.mostActiveMonth()
 	leastMonth, leastMonthCount := stats.leastActiveMonth()
 	day, dayCount := stats.mostActiveDay()
@@ -384,7 +382,19 @@ func newYearStats() *yearStats {
 }
 
 func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
-	s.totalMessages++
+	// Skip service messages (join/leave notifications, etc.)
+	msgType, ok := msg["_"].(string)
+	if ok {
+		switch msgType {
+		case "TL_messageActionChatAddUser",
+			"TL_messageService",
+			"TL_messageActionChatJoinedByRequest",
+			"TL_messageActionChatDeleteUser":
+		default:
+			s.totalMessages++
+		}
+	}
+
 	// Track by topic (forum topic ID from ReplyTo)
 	topicID := extractTopicID(msg)
 	topicKey := fmt.Sprintf("%d:%d", chatID, topicID)
@@ -739,14 +749,14 @@ func (s *yearStats) topicStats() []string {
 	entries := make([]entry, 0, len(s.topicMsgs))
 	for key, count := range s.topicMsgs {
 		chatID, topicID := parseTopicKey(key)
-		if topicID <= 0 {
-			continue
+		title := ""
+		if topicID == 0 {
+			title = "General"
+		} else if topicName, ok := golangUATopicIDsNames[topicID]; ok {
+			title = topicName
+		} else {
+			title = fmt.Sprintf("Topic #%d", topicID)
 		}
-		topicName, ok := golangUATopicIDsNames[topicID]
-		if !ok {
-			continue
-		}
-		title := fmt.Sprintf("%s", topicName)
 		percent := float64(count) * 100 / float64(s.totalMessages)
 		entries = append(entries, entry{chatID: chatID, topicID: topicID, title: title, count: count, percent: percent})
 	}
@@ -1185,16 +1195,15 @@ func extractTopicID(msg map[string]any) int32 {
 	if !ok {
 		return 0
 	}
-	forumTopic, ok := replyToMap["ForumTopic"]
-	if !ok {
-		return 0
+
+	if topicID, ok := replyToMap["ReplyToTopID"].(float64); ok && topicID != 0 {
+		return int32(topicID)
 	}
 
-	if isForum, ok := forumTopic.(bool); ok && isForum {
-		if topicID, ok := replyToMap["ReplyToTopID"].(float64); ok {
-			return int32(topicID)
-		}
+	if msgID, ok := replyToMap["ReplyToMsgID"].(float64); ok && msgID != 0 {
+		return int32(msgID)
 	}
+
 	return 0
 }
 
