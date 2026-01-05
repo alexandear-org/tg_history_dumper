@@ -278,7 +278,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 
 func messagesInYear(r *ChatsMessageReader, chatPath string, year int) ([]map[string]any, error) {
 	start := time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
-	end := time.Date(year+1, time.January, 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(1, 0, 0)
 
 	var keep []map[string]any
 	offset, limit := 0, 5000
