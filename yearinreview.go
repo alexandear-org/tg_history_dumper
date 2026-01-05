@@ -129,6 +129,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	weekday, weekdayCount := stats.mostActiveWeekday()
 	hour, hourCount := stats.peakHour()
 	leaderboard := stats.leaderboard(userCache, maxLeaderboardSize)
+	topicStatsList := stats.topicStats()
 	awards := stats.funAwards(userCache)
 
 	monthLabel := "n/a"
@@ -184,6 +185,12 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 
 	fmt.Fprint(&buf, "## 📊 Головне за рік\n\n")
 	fmt.Fprintf(&buf, "- **Усього повідомлень:** %d\n", total)
+	if len(topicStatsList) > 0 {
+		fmt.Fprintf(&buf, "- **Повідомлень по темах:**\n")
+		for _, line := range topicStatsList {
+			fmt.Fprintf(&buf, "  - %s\n", line)
+		}
+	}
 	fmt.Fprintf(&buf, "- **Активних учасників, які писали, реагували чи доєднувалися:** %d\n", participants)
 	fmt.Fprintf(&buf, "- **Найгарячіший місяць:** %s (%d пов.)\n", monthLabel, monthCount)
 	fmt.Fprintf(&buf, "- **Найспокійніший місяць:** %s\n", leastMonthLabel)
@@ -200,6 +207,14 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	if len(leaderboard) > 0 {
 		fmt.Fprintf(&buf, "## 🏅 Топ балакучих\n\n")
 		for i, line := range leaderboard {
+			fmt.Fprintf(&buf, "%d. %s\n", i+1, line)
+		}
+		fmt.Fprint(&buf, "\n")
+	}
+
+	if len(topicStatsList) > 0 && chatID == 0 {
+		fmt.Fprintf(&buf, "## 📊 Статистика по темах\n\n")
+		for i, line := range topicStatsList {
 			fmt.Fprintf(&buf, "%d. %s\n", i+1, line)
 		}
 		fmt.Fprint(&buf, "\n")
@@ -312,6 +327,7 @@ type reactionCount struct {
 
 type yearStats struct {
 	totalMessages      int
+	topicMsgs          map[string]int
 	participantMsgs    map[int64]int
 	participantChars   map[int64]int
 	participantWords   map[int64]int
@@ -342,6 +358,7 @@ type chatMsg struct {
 
 func newYearStats() *yearStats {
 	return &yearStats{
+		topicMsgs:          make(map[string]int),
 		participantMsgs:    make(map[int64]int),
 		participantChars:   make(map[int64]int),
 		participantWords:   make(map[int64]int),
@@ -368,6 +385,10 @@ func newYearStats() *yearStats {
 
 func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 	s.totalMessages++
+	// Track by topic (forum topic ID from ReplyTo)
+	topicID := extractTopicID(msg)
+	topicKey := fmt.Sprintf("%d:%d", chatID, topicID)
+	s.topicMsgs[topicKey]++
 	date := time.Unix(int64(msg["Date"].(float64)), 0)
 	day := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
 	month := date.Month()
@@ -685,6 +706,66 @@ func (s *yearStats) reactionReceivedLeaderboard(reader *ChatCachedReader[UserDat
 
 func (s *yearStats) reactionSentLeaderboard(reader *ChatCachedReader[UserData], limit int) []string {
 	return s.buildReactionLeaderboard(reader, s.reactionsSent, limit)
+}
+
+var golangUATopicIDsNames = map[int32]string{
+	14800: "flood",
+	13867: "main()",
+	44029: "learning",
+	19210: "lviv",
+	14805: "vacancy",
+	33333: "tech (non-Go)",
+	14111: "переклади (UA)",
+	37569: "interview preparation",
+	73606: "Шукаю роботу",
+	19211: "kyiv",
+	39724: "Робимо телеграм бота",
+	15567: "algorithms, etc...",
+}
+
+func (s *yearStats) topicStats() []string {
+	if len(s.topicMsgs) == 0 {
+		return nil
+	}
+
+	type entry struct {
+		chatID  int64
+		topicID int32
+		title   string
+		count   int
+		percent float64
+	}
+
+	entries := make([]entry, 0, len(s.topicMsgs))
+	for key, count := range s.topicMsgs {
+		chatID, topicID := parseTopicKey(key)
+		if topicID <= 0 {
+			continue
+		}
+		topicName, ok := golangUATopicIDsNames[topicID]
+		if !ok {
+			continue
+		}
+		title := fmt.Sprintf("%s", topicName)
+		percent := float64(count) * 100 / float64(s.totalMessages)
+		entries = append(entries, entry{chatID: chatID, topicID: topicID, title: title, count: count, percent: percent})
+	}
+
+	slices.SortFunc(entries, func(a, b entry) int {
+		if a.chatID != b.chatID {
+			return cmp.Compare(a.chatID, b.chatID)
+		}
+		if a.count != b.count {
+			return cmp.Compare(b.count, a.count)
+		}
+		return cmp.Compare(a.topicID, b.topicID)
+	})
+
+	res := make([]string, 0, len(entries))
+	for _, e := range entries {
+		res = append(res, fmt.Sprintf("%s — %d пов. (%.1f%%)", e.title, e.count, e.percent))
+	}
+	return res
 }
 
 func (s *yearStats) buildReactionLeaderboard(reader *ChatCachedReader[UserData], reactions map[int64]int, limit int) []string {
@@ -1093,6 +1174,39 @@ func formatUserName(reader *ChatCachedReader[UserData], id int64) string {
 		}
 	}
 	return "user#" + strconv.FormatInt(id, 10)
+}
+
+func extractTopicID(msg map[string]any) int32 {
+	replyTo, ok := msg["ReplyTo"]
+	if !ok {
+		return 0
+	}
+	replyToMap, ok := replyTo.(map[string]any)
+	if !ok {
+		return 0
+	}
+	forumTopic, ok := replyToMap["ForumTopic"]
+	if !ok {
+		return 0
+	}
+
+	if isForum, ok := forumTopic.(bool); ok && isForum {
+		if topicID, ok := replyToMap["ReplyToTopID"].(float64); ok {
+			return int32(topicID)
+		}
+	}
+	return 0
+}
+
+func parseTopicKey(key string) (chatID int64, topicID int32) {
+	parts := strings.SplitN(key, ":", 2)
+	if len(parts) != 2 {
+		return 0, 0
+	}
+	chatID, _ = strconv.ParseInt(parts[0], 10, 64)
+	topicIDInt, _ := strconv.ParseInt(parts[1], 10, 32)
+	topicID = int32(topicIDInt)
+	return chatID, topicID
 }
 
 // formatUserLink returns a markdown link to the user's Telegram profile if username is available.
