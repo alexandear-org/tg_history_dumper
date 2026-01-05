@@ -1096,15 +1096,11 @@ func formatMessagePreview(text string, maxRunes int) string {
 	return strings.ReplaceAll(preview, "\n", "\n> ")
 }
 
+const chatURL = "https://t.me/golang_ua_official"
+
 // formatMessageLink returns a Telegram link to the message.
 func formatMessageLink(chatID int64, msgID int32) string {
-	// For private chats and groups, use the format: https://t.me/c/{abs(chat_id)}/{message_id}
-	// Negative chat IDs indicate groups/channels; absolute value is used in the link
-	absID := chatID
-	if absID < 0 {
-		absID = -absID
-	}
-	return fmt.Sprintf("https://t.me/c/%d/%d", absID, msgID)
+	return fmt.Sprintf("%s/%d", chatURL, msgID)
 }
 
 func (s *yearStats) topWords(limit int) []string {
