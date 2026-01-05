@@ -23,6 +23,8 @@ const (
 var (
 	instagramDomains = []string{"instagram.com", "ddinstagram.com"}
 	youtubeDomains   = []string{"youtube.com", "youtu.be"}
+	goDomains        = []string{"golang.org", "go.dev"}
+	githubDomains    = []string{"github.com", "githubusercontent.com"}
 
 	monthsUA = map[time.Month]string{
 		time.January:   "січ",
@@ -317,6 +319,8 @@ type yearStats struct {
 	forwardCount       map[int64]int
 	instagramLinkCount map[int64]int
 	youtubeLinkCount   map[int64]int
+	goLinkCount        map[int64]int
+	githubLinkCount    map[int64]int
 	reactionsReceived  map[int64][]reactionCount
 	reactionsSent      map[int64]int
 	emojiCounts        map[string]int
@@ -345,6 +349,8 @@ func newYearStats() *yearStats {
 		forwardCount:       make(map[int64]int),
 		instagramLinkCount: make(map[int64]int),
 		youtubeLinkCount:   make(map[int64]int),
+		goLinkCount:        make(map[int64]int),
+		githubLinkCount:    make(map[int64]int),
 		reactionsReceived:  make(map[int64][]reactionCount),
 		reactionsSent:      make(map[int64]int),
 		emojiCounts:        make(map[string]int),
@@ -396,6 +402,12 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 			}
 			for _, domain := range youtubeDomains {
 				s.youtubeLinkCount[userID] += countURLs(text, domain)
+			}
+			for _, domain := range goDomains {
+				s.goLinkCount[userID] += countURLs(text, domain)
+			}
+			for _, domain := range githubDomains {
+				s.githubLinkCount[userID] += countURLs(text, domain)
 			}
 			// Track top longest messages, excluding reposts forwarded from channels
 			if !isForwardFromChannel(msg) {
@@ -775,6 +787,8 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	maxForwardID, maxForwardCount := topByIntMap(s.forwardCount, false)
 	maxInstagramID, maxInstagramCount := topByIntMap(s.instagramLinkCount, false)
 	maxYoutubeID, maxYoutubeCount := topByIntMap(s.youtubeLinkCount, false)
+	maxGoID, maxGoCount := topByIntMap(s.goLinkCount, false)
+	maxGitHubID, maxGitHubcount := topByIntMap(s.githubLinkCount, false)
 	maxFireID, maxFireCount := s.topReactionByEmoji("🔥")
 
 	maxAvgID, maxAvg := topAvgChars(s.participantChars, s.participantMsgs)
@@ -792,17 +806,23 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	if minMsgID != 0 {
 		awards = append(awards, fmt.Sprintf("🕵️ Тихоня (найменше повідомлень): %s — %d", formatUserLink(reader, minMsgID, formatUserName(reader, minMsgID)), minMsgCount))
 	}
+	if maxGoID != 0 {
+		awards = append(awards, fmt.Sprintf("🐹 Гофер: %s — %d лінків на Go сайт", formatUserLink(reader, maxGoID, formatUserName(reader, maxGoID)), maxGoCount))
+	}
+	if maxInstagramID != 0 {
+		awards = append(awards, fmt.Sprintf("📷 Інстаграмер: %s — %d лінків на Instagram", formatUserLink(reader, maxInstagramID, formatUserName(reader, maxInstagramID)), maxInstagramCount))
+	}
+	if maxGitHubID != 0 {
+		awards = append(awards, fmt.Sprintf("🐙 Октопус: %s — %d лінків на GitHub", formatUserLink(reader, maxGitHubID, formatUserName(reader, maxGitHubID)), maxGitHubcount))
+	}
+	if maxYoutubeID != 0 {
+		awards = append(awards, fmt.Sprintf("🎬 Ютубер: %s — %d лінків на YouTube", formatUserLink(reader, maxYoutubeID, formatUserName(reader, maxYoutubeID)), maxYoutubeCount))
+	}
 	if maxLinksID != 0 {
 		awards = append(awards, fmt.Sprintf("🔗 Пруфер (найбільше надісланих лінків): %s — %d", formatUserLink(reader, maxLinksID, formatUserName(reader, maxLinksID)), maxLinksCount))
 	}
 	if maxForwardID != 0 {
 		awards = append(awards, fmt.Sprintf("📨 Форвардер: %s — %d пересилок", formatUserLink(reader, maxForwardID, formatUserName(reader, maxForwardID)), maxForwardCount))
-	}
-	if maxInstagramID != 0 {
-		awards = append(awards, fmt.Sprintf("📷 Інстаграмер: %s — %d лінків на Instagram", formatUserLink(reader, maxInstagramID, formatUserName(reader, maxInstagramID)), maxInstagramCount))
-	}
-	if maxYoutubeID != 0 {
-		awards = append(awards, fmt.Sprintf("🎬 Ютубер: %s — %d лінків на YouTube", formatUserLink(reader, maxYoutubeID, formatUserName(reader, maxYoutubeID)), maxYoutubeCount))
 	}
 	if maxFireID != 0 {
 		awards = append(awards, fmt.Sprintf("🔥 Прометей (найбільше отриманих вогнів): %s — %d", formatUserLink(reader, maxFireID, formatUserName(reader, maxFireID)), maxFireCount))
