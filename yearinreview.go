@@ -895,7 +895,7 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 
 	maxMsgID, maxMsgCount := topByIntMap(s.participantMsgs, false)
 	maxWordsID, maxWordsCount := topByIntMap(s.participantWords, false)
-	minMsgID, minMsgCount := topByIntMap(s.participantMsgs, true)
+	minMsgID, minMsgCount := leastMap(s.participantMsgs)
 	maxLinksID, maxLinksCount := topByIntMap(s.linkCount, false)
 	maxForwardID, maxForwardCount := topByIntMap(s.forwardCount, false)
 	maxInstagramID, maxInstagramCount := topByIntMap(s.instagramLinkCount, false)
@@ -918,7 +918,7 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 		awards = append(awards, fmt.Sprintf("📚 Есеїст (найдовші повідомлення в середньому): %s — %.1f симв./повід.", formatUserLink(reader, maxAvgID, formatUserName(reader, maxAvgID)), maxAvg))
 	}
 	if minMsgID != 0 {
-		awards = append(awards, fmt.Sprintf("🕵️ Тихоня (найменше повідомлень): %s — %d", formatUserLink(reader, minMsgID, formatUserName(reader, minMsgID)), minMsgCount))
+		awards = append(awards, fmt.Sprintf("🕵️ Тихоня (найменше повідомлень серед активних учасників): %s — %d", formatUserLink(reader, minMsgID, formatUserName(reader, minMsgID)), minMsgCount))
 	}
 	if maxGoID != 0 {
 		awards = append(awards, fmt.Sprintf("🐹 Гофер: %s — %d лінків на Go сайт", formatUserLink(reader, maxGoID, formatUserName(reader, maxGoID)), maxGoCount))
@@ -1088,12 +1088,31 @@ func topByIntMap(m map[int64]int, wantMin bool) (int64, int) {
 	return bestID, bestVal
 }
 
+const minMessagesCount = 10
+
+func leastMap(m map[int64]int) (int64, int) {
+	var bestID int64
+	var bestVal int
+	for id, val := range m {
+		if val < minMessagesCount {
+			continue
+		}
+		if bestVal == minMessagesCount || val < bestVal || (val == bestVal && id < bestID) {
+			bestVal = val
+			bestID = id
+		}
+	}
+	return bestID, bestVal
+}
+
+const minMessagesForAvg = 10
+
 func topAvgChars(chars map[int64]int, msgs map[int64]int) (int64, float64) {
 	var bestID int64
 	bestAvg := 0.0
 	for id, charCount := range chars {
 		msgCount := msgs[id]
-		if msgCount == 0 {
+		if msgCount < minMessagesForAvg {
 			continue
 		}
 		avg := float64(charCount) / float64(msgCount)
