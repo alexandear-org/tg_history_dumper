@@ -1105,29 +1105,6 @@ func topAvgChars(chars map[int64]int, msgs map[int64]int) (int64, float64) {
 	return bestID, bestAvg
 }
 
-func parseIDs(val any) []int64 {
-	ids := make([]int64, 0)
-	switch v := val.(type) {
-	case []any:
-		for _, item := range v {
-			if id, ok := parseID(item); ok {
-				ids = append(ids, id)
-			}
-		}
-	case []int32:
-		for _, item := range v {
-			ids = append(ids, int64(item))
-		}
-	case []int64:
-		ids = append(ids, v...)
-	case []float64:
-		for _, item := range v {
-			ids = append(ids, int64(item))
-		}
-	}
-	return ids
-}
-
 func parseID(val any) (int64, bool) {
 	switch v := val.(type) {
 	case string:
