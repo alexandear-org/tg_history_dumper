@@ -128,8 +128,6 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	weekday, weekdayCount := stats.mostActiveWeekday()
 	hour, hourCount := stats.peakHour()
 	median := stats.medianMsgsPerPerson()
-	joinedNames := stats.namesWithDates(userCache, stats.joiners)
-	leavedNames := stats.namesWithDates(userCache, stats.leavers)
 	leaderboard := stats.leaderboard(userCache, maxLeaderboardSize)
 	awards := stats.funAwards(userCache)
 
@@ -187,12 +185,6 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	fmt.Fprint(&buf, "## 📊 Головне за рік\n\n")
 	fmt.Fprintf(&buf, "- **Усього повідомлень:** %d\n", total)
 	fmt.Fprintf(&buf, "- **Учасників:** %d\n", participants)
-	if len(leavedNames) > 0 {
-		fmt.Fprintf(&buf, "- **Покинули чат: %d:** %s\n", len(leavedNames), strings.Join(leavedNames, ", "))
-	}
-	if len(joinedNames) > 0 {
-		fmt.Fprintf(&buf, "- **Приєдналися: %d:** %s\n", len(joinedNames), strings.Join(joinedNames, ", "))
-	}
 	fmt.Fprintf(&buf, "- **Найгарячіший місяць:** %s (%d пов.)\n", monthLabel, monthCount)
 	fmt.Fprintf(&buf, "- **Найспокійніший місяць:** %s\n", leastMonthLabel)
 	fmt.Fprintf(&buf, "- **Найгарячіший день:** %s (%d пов.)\n", dayLabel, dayCount)
@@ -326,8 +318,6 @@ type yearStats struct {
 	reactionsSent      map[int64]int
 	emojiCounts        map[string]int
 	wordCounts         map[string]int
-	joiners            map[int64]joinLeaveInfo
-	leavers            map[int64]joinLeaveInfo
 	monthCount         map[time.Month]int
 	dayCount           map[time.Time]int
 	weekdayCount       map[time.Weekday]int
@@ -336,12 +326,6 @@ type yearStats struct {
 	firstDayMsg        map[time.Time]chatMsg
 	messageReactions   map[string]msgReaction
 	longest            []longMessage
-}
-
-type joinLeaveInfo struct {
-	date   time.Time
-	chatID int64
-	msgID  int32
 }
 
 type chatMsg struct {
@@ -362,8 +346,6 @@ func newYearStats() *yearStats {
 		reactionsSent:      make(map[int64]int),
 		emojiCounts:        make(map[string]int),
 		wordCounts:         make(map[string]int),
-		joiners:            make(map[int64]joinLeaveInfo),
-		leavers:            make(map[int64]joinLeaveInfo),
 		monthCount:         make(map[time.Month]int),
 		dayCount:           make(map[time.Time]int),
 		weekdayCount:       make(map[time.Weekday]int),
@@ -524,25 +506,6 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 			}
 		}
 	}
-
-	action, ok := msg["Action"].(map[string]any)
-	if ok {
-		joins, leaves := extractActionUserIDs(action, msgAuthor)
-		msgID := int32(0)
-		if mid, ok := msg["ID"].(float64); ok {
-			msgID = int32(mid)
-		}
-		for _, id := range joins {
-			if _, exists := s.joiners[id]; !exists {
-				s.joiners[id] = joinLeaveInfo{date: date, chatID: chatID, msgID: msgID}
-			}
-		}
-		for _, id := range leaves {
-			if _, exists := s.leavers[id]; !exists {
-				s.leavers[id] = joinLeaveInfo{date: date, chatID: chatID, msgID: msgID}
-			}
-		}
-	}
 }
 
 func (s *yearStats) participantCount() int {
@@ -650,18 +613,6 @@ func (s *yearStats) medianMsgsPerPerson() float64 {
 		return float64(counts[mid])
 	}
 	return float64(counts[mid-1]+counts[mid]) / 2
-}
-
-func (s *yearStats) namesWithDates(reader *ChatCachedReader[UserData], ids map[int64]joinLeaveInfo) []string {
-	res := make([]string, 0, len(ids))
-	for id, info := range ids {
-		name := formatUserName(reader, id)
-		link := formatUserLink(reader, id, name)
-		msgLink := formatMessageLink(info.chatID, info.msgID)
-		d := info.date.UTC()
-		res = append(res, fmt.Sprintf("%s ([%d %s](%s))", link, d.Day(), monthsUA[d.Month()], msgLink))
-	}
-	return slices.Sorted(slices.Values(res))
 }
 
 func (s *yearStats) addReactionsReceived(userID int64, emojiCounts map[string]int) {
@@ -1018,30 +969,6 @@ func topAvgChars(chars map[int64]int, msgs map[int64]int) (int64, float64) {
 		}
 	}
 	return bestID, bestAvg
-}
-
-func extractActionUserIDs(action map[string]any, msgAuthor int64) (joins []int64, leaves []int64) {
-	switch action["_"] {
-	case "TL_messageActionChatAddUser":
-		joins = append(joins, parseIDs(action["Users"])...)
-		if id, ok := parseID(action["UserID"]); ok {
-			joins = append(joins, id)
-		}
-	case "TL_messageActionChatJoinedByLink":
-		joins = append(joins, parseIDs(action["Users"])...)
-		// Joined by link: actual joiner is the message author (FromID). Fallback to UserID if present.
-		if msgAuthor != 0 {
-			joins = append(joins, msgAuthor)
-		} else if id, ok := parseID(action["UserID"]); ok {
-			joins = append(joins, id)
-		}
-	case "TL_messageActionChatDeleteUser":
-		if id, ok := parseID(action["UserID"]); ok {
-			leaves = append(leaves, id)
-		}
-	default:
-	}
-	return joins, leaves
 }
 
 func parseIDs(val any) []int64 {
