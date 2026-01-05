@@ -210,14 +210,6 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 		fmt.Fprint(&buf, "\n")
 	}
 
-	if len(topicStatsList) > 0 && chatID == 0 {
-		fmt.Fprintf(&buf, "## 📊 Статистика по темах\n\n")
-		for i, line := range topicStatsList {
-			fmt.Fprintf(&buf, "%d. %s\n", i+1, line)
-		}
-		fmt.Fprint(&buf, "\n")
-	}
-
 	if rxnReceivedBoard := stats.reactionReceivedLeaderboard(userCache, maxLeaderboardSize); len(rxnReceivedBoard) > 0 {
 		fmt.Fprintf(&buf, "## 👍 Топ за отриманими реакціями\n\n")
 		for i, line := range rxnReceivedBoard {
