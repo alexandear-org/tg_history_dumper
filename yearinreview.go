@@ -256,9 +256,6 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 		fmt.Fprint(&buf, "## 📜 Найдовші повідомлення (за кількістю символів)\n\n")
 		for _, lm := range longest {
 			name := formatUserName(userCache, lm.userID)
-			if name == "" {
-				continue
-			}
 			nameLink := formatUserLink(userCache, lm.userID, name)
 			msgLink := formatMessageLink(lm.chatID, lm.msgID)
 			dateStr := formatDateTimeUA(lm.date)
@@ -271,9 +268,6 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 		fmt.Fprint(&buf, "## 🔥 Найбільш реактивні повідомлення\n\n")
 		for i, rm := range topReacted {
 			name := formatUserName(userCache, rm.userID)
-			if name == "" {
-				continue
-			}
 			nameLink := formatUserLink(userCache, rm.userID, name)
 			msgLink := formatMessageLink(rm.chatID, rm.msgID)
 			dateStr := formatDateTimeUA(rm.date)
@@ -793,9 +787,6 @@ func (s *yearStats) buildReactionLeaderboard(reader *ChatCachedReader[UserData],
 	for id, count := range reactions {
 		if count >= 3 {
 			name := formatUserName(reader, id)
-			if name == "" {
-				continue
-			}
 			entries = append(entries, entry{id: id, name: name, count: count})
 		}
 	}
@@ -835,9 +826,6 @@ func (s *yearStats) leaderboard(reader *ChatCachedReader[UserData], limit int) [
 	entries := make([]entry, 0, len(s.participantMsgs))
 	for id, count := range s.participantMsgs {
 		name := formatUserName(reader, id)
-		if name == "" {
-			continue
-		}
 		chars := s.participantChars[id]
 		percent := float64(count) * 100 / float64(s.totalMessages)
 		entries = append(entries, entry{id: id, name: name, count: count, chars: chars, percent: percent})
@@ -1180,7 +1168,7 @@ func formatUserName(reader *ChatCachedReader[UserData], id int64) string {
 			return name
 		}
 		if user.IsDeleted {
-			return ""
+			return "Deleted account #" + strconv.FormatInt(user.ID, 10)
 		}
 	}
 	return "user#" + strconv.FormatInt(id, 10)
