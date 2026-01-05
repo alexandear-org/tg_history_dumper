@@ -240,7 +240,7 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	}
 
 	if topWords := stats.topWords(20); len(topWords) > 0 {
-		fmt.Fprint(&buf, "## 📝 Топ слів довше 4 букв (без поширених слів)\n\n")
+		fmt.Fprint(&buf, "## 📝 Топ слів (без поширених слів)\n\n")
 		for _, line := range topWords {
 			fmt.Fprintf(&buf, "- %s\n", line)
 		}
@@ -419,6 +419,10 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 			}
 			for _, w := range splitWords(text) {
 				lw := strings.ToLower(w)
+				if lw == "golang" || lw == "go" { // special case: keep "Go" because it's a programming language
+					s.wordCounts[`Go (Golang)`]++
+					continue
+				}
 				if _, stop := stopWords[lw]; stop {
 					continue
 				}
@@ -1232,7 +1236,8 @@ var stopWords = func() map[string]struct{} {
 		"якщо", "хто", "тому", "через", "був", "була", "було", "буде",
 		"мені", "дуже", "щось", "його", "десь", "хтось", "навіть", "після", "можна", "треба",
 		"мене", "таке", "типу", "який", "тебе", "собі", "бути", "тоді", "чому", "поки", "такі",
-		"собі", "тобі", "саме", "цього", "були", "будь", "всіх", "всім", "нехай",
+		"собі", "тобі", "саме", "цього", "були", "будь", "всіх", "всім", "нехай", "того", "воно",
+		"потім",
 	})
 	return m
 }()
