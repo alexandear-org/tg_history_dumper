@@ -341,6 +341,8 @@ type yearStats struct {
 	firstDayMsg        map[time.Time]chatMsg
 	messageReactions   map[string]msgReaction
 	longest            []longMessage
+	repliesReceived    map[int64]int
+	messageAuthors     map[int32]int64 // maps message ID to author user ID
 }
 
 type chatMsg struct {
@@ -372,6 +374,8 @@ func newYearStats() *yearStats {
 		firstDayMsg:        make(map[time.Time]chatMsg),
 		messageReactions:   make(map[string]msgReaction),
 		longest:            make([]longMessage, 0, maxLongestMessages),
+		repliesReceived:    make(map[int64]int),
+		messageAuthors:     make(map[int32]int64),
 	}
 }
 
@@ -461,8 +465,26 @@ func (s *yearStats) addMessage(chatID int64, msg map[string]any) {
 		}
 	}
 
-	// Count reactions on messages
+	// Count reactions on messages and track message authors
 	msgAuthor, msgAuthorOk := extractUserID(msg)
+	if msgAuthorOk {
+		// Store this message's author for reply tracking
+		if msgID, ok := msg["ID"].(float64); ok {
+			s.messageAuthors[int32(msgID)] = msgAuthor
+		}
+
+		// Track replies to messages (for identifying who asks good questions)
+		if replyTo, ok := msg["ReplyTo"].(map[string]any); ok {
+			if replyToMsgID, ok := replyTo["ReplyToMsgID"].(float64); ok && replyToMsgID > 0 {
+				// Look up who authored the message being replied to
+				if originalAuthor, exists := s.messageAuthors[int32(replyToMsgID)]; exists {
+					s.repliesReceived[originalAuthor]++
+				}
+			}
+		}
+	}
+
+	// Count reactions on messages
 	if reactionsData, ok := msg["Reactions"]; ok && reactionsData != nil {
 		if reactionsMap, ok := reactionsData.(map[string]any); ok {
 			totalReactions := 0
@@ -854,6 +876,18 @@ func (s *yearStats) leaderboard(reader *ChatCachedReader[UserData], limit int) [
 	return res
 }
 
+func (s *yearStats) topRepliedToUser(reader *ChatCachedReader[UserData]) (int64, int) {
+	var maxID int64
+	maxCount := 0
+	for id, count := range s.repliesReceived {
+		if count > maxCount || (count == maxCount && (maxID == 0 || id < maxID)) {
+			maxID = id
+			maxCount = count
+		}
+	}
+	return maxID, maxCount
+}
+
 func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	if len(s.participantMsgs) == 0 {
 		return nil
@@ -871,6 +905,7 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	maxFireID, maxFireCount := s.topReactionByEmoji("🔥")
 
 	maxAvgID, maxAvg := topAvgChars(s.participantChars, s.participantMsgs)
+	maxRepliedID, maxRepliedCount := s.topRepliedToUser(reader)
 
 	awards := []string{}
 	if maxMsgID != 0 {
@@ -905,6 +940,9 @@ func (s *yearStats) funAwards(reader *ChatCachedReader[UserData]) []string {
 	}
 	if maxFireID != 0 {
 		awards = append(awards, fmt.Sprintf("🔥 Прометей (найбільше отриманих вогнів): %s — %d", formatUserLink(reader, maxFireID, formatUserName(reader, maxFireID)), maxFireCount))
+	}
+	if maxRepliedID != 0 {
+		awards = append(awards, fmt.Sprintf("🎯 Магніт обговорень (найбільше відповідей на його повідомлення): %s — %d", formatUserLink(reader, maxRepliedID, formatUserName(reader, maxRepliedID)), maxRepliedCount))
 	}
 	return awards
 }
