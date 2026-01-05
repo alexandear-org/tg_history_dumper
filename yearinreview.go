@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -127,7 +126,6 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 	leastDay, leastDayCount := stats.leastActiveDay()
 	weekday, weekdayCount := stats.mostActiveWeekday()
 	hour, hourCount := stats.peakHour()
-	median := stats.medianMsgsPerPerson()
 	leaderboard := stats.leaderboard(userCache, maxLeaderboardSize)
 	awards := stats.funAwards(userCache)
 
@@ -184,14 +182,13 @@ func runYearInReview(saver *JSONFilesHistorySaver, year int, chatID int64) (stri
 
 	fmt.Fprint(&buf, "## 📊 Головне за рік\n\n")
 	fmt.Fprintf(&buf, "- **Усього повідомлень:** %d\n", total)
-	fmt.Fprintf(&buf, "- **Учасників:** %d\n", participants)
+	fmt.Fprintf(&buf, "- **Активних учасників, які писали, реагували чи доєднувалися:** %d\n", participants)
 	fmt.Fprintf(&buf, "- **Найгарячіший місяць:** %s (%d пов.)\n", monthLabel, monthCount)
 	fmt.Fprintf(&buf, "- **Найспокійніший місяць:** %s\n", leastMonthLabel)
 	fmt.Fprintf(&buf, "- **Найгарячіший день:** %s (%d пов.)\n", dayLabel, dayCount)
 	fmt.Fprintf(&buf, "- **Найспокійніший день:** %s\n", leastDayLabel)
 	fmt.Fprintf(&buf, "- **Найактивніший день тижня:** %s (%d пов.)\n", weekdayLabel, weekdayCount)
 	fmt.Fprintf(&buf, "- **Піковий час:** %s (%d пов.)\n", hourLabel, hourCount)
-	fmt.Fprintf(&buf, "- **Медіана повідомлень на людину:** %d\n", int(median))
 	fmt.Fprint(&buf, "\n")
 
 	pdfPageBreak := func(w io.Writer) {
@@ -607,18 +604,6 @@ func (s *yearStats) peakHour() (maxHour int, maxCount int) {
 		}
 	}
 	return maxHour, maxCount
-}
-
-func (s *yearStats) medianMsgsPerPerson() float64 {
-	if len(s.participantMsgs) == 0 {
-		return 0
-	}
-	counts := slices.Sorted(maps.Values(s.participantMsgs))
-	mid := len(counts) / 2
-	if len(counts)%2 == 1 {
-		return float64(counts[mid])
-	}
-	return float64(counts[mid-1]+counts[mid]) / 2
 }
 
 func (s *yearStats) addReactionsReceived(userID int64, emojiCounts map[string]int) {
